@@ -8,6 +8,8 @@ import { useSearchParams } from "react-router-dom";
 
 const CandidateJobHistoryPage = () => {
   const [jobs, setJobs] = useState([]);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedJob, setSelectedJob] = useState(null);
@@ -20,17 +22,21 @@ const CandidateJobHistoryPage = () => {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("");
 
-
   useEffect(() => {
     loadJobs();
-  }, []);
+  }, [page, pageSize]);
   
   const loadJobs = async () => {
     try {
       setLoading(true);
       setError("");
-      const res = await getAllCandidateJobs();
-      setJobs(res.data);
+
+      const res = await getAllCandidateJobs(page - 1, pageSize);
+
+      setJobs(res.data?.content || []);
+      setTotalPages(res.data?.totalPages || 0);
+      setTotalElements(res.data?.totalElements || 0);
+
     } catch (err) {
       console.error("Failed to load candidate jobs", err);
       setError("Failed to load jobs");
@@ -42,19 +48,6 @@ const CandidateJobHistoryPage = () => {
   // =====================
   // FILTERED JOBS (IMPORTANT)
   // =====================
-  const filteredJobs = jobs.filter((job) => {
-    const matchesTitle =
-      job.title?.toLowerCase().includes(searchTitle.toLowerCase());
-
-    const matchesStatus =
-      statusFilter === "ALL" ||
-      (job.applicationStatus ?? "NOT_APPLIED") === statusFilter;
-
-    const matchesDate =
-      !dateFilter || job.appliedAt?.startsWith(dateFilter);
-
-    return matchesTitle && matchesStatus && matchesDate;
-  });
 
 const handleDownload = async (jobId) => {
   try {
@@ -95,20 +88,7 @@ const handleDownload = async (jobId) => {
   }
 };
 
-  const totalJobs = filteredJobs.length;
-  const totalPages = Math.ceil(totalJobs / pageSize);
-  const startIndex = (page - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalJobs);
-  const paginatedJobs = filteredJobs.slice(startIndex, endIndex);
-
   const isMobile = window.innerWidth < 768;
-
-  const updateUrl = (page, size) => {
-    const params = new URLSearchParams();
-    params.set("page", page);
-    params.set("pageSize", size);
-    window.history.replaceState(null, "", `?${params.toString()}`);
-  };
 
   const goToPage = (p) => {
     if (p < 1 || p > totalPages) return;
@@ -133,11 +113,11 @@ const handleDownload = async (jobId) => {
 
       {loading && <p>Loading jobs...</p>}
 
-      {!loading && error && jobs.length === 0 && (
+      {!loading && error && jobs?.length === 0 && (
         <p style={{ color: "red" }}>{error}</p>
       )}
 
-      {!loading && jobs.length === 0 && (
+      {!loading && jobs?.length === 0 && (
         <p>No jobs assigned yet.</p>
       )}
 
@@ -223,7 +203,7 @@ const handleDownload = async (jobId) => {
             </thead>
 
             <tbody>
-              {paginatedJobs.map((job) => (
+              {jobs.map((job) => (
                 <tr key={job.jobId}
                   style={{
                     lineHeight: "1.6",
@@ -512,7 +492,11 @@ const handleDownload = async (jobId) => {
           >
             {/* LEFT — COUNT */}
             <div style={{ fontSize: "13px", color: "#6b7280" }}>
-              Showing {startIndex + 1}–{endIndex} of {totalJobs} jobs
+              {/* Showing {startIndex + 1}–{endIndex} of {totalJobs} jobs */}
+              Showing {jobs.length === 0 ? 0 : (page - 1) * pageSize + 1}
+              –
+              {Math.min(page * pageSize, totalElements)}
+              of {totalElements} jobs
             </div>
 
             {/* CENTER — PAGINATION */}
