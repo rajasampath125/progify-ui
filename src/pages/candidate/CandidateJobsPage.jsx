@@ -9,54 +9,73 @@ import { useSearchParams } from "react-router-dom";
 const CandidateJobsPage = () => {
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
+    // 🔹 Backend pagination state
+    const [totalPages, setTotalPages] = useState(0);
+    const [totalJobs, setTotalJobs] = useState(0);
     const [searchTitle, setSearchTitle] = useState("");
-    const [statusFilter, setStatusFilter] = useState("ALL");
-
     const [dateFilter, setDateFilter] = useState("");
-
+    const [searchParams, setSearchParams] = useSearchParams();
+    const page = Number(searchParams.get("page") || 1);
+    const pageSize = Number(searchParams.get("pageSize") || 5);
+    // 🔹 Fetch paginated jobs from backend
     useEffect(() => {
         setLoading(true);
-        getAvailableJobs()
-            .then((res) => setJobs(res.data))
-            .finally(() => setLoading(false));
-    }, []);
 
+        getAvailableJobs(page - 1, pageSize)
+            .then((res) => {
+                const data = res?.data;
+
+                // 🔹 If backend returns paginated format
+                if (data && data.content) {
+                    setJobs(data.content);
+                    setTotalPages(data.totalPages ?? 0);
+                    setTotalJobs(data.totalElements ?? 0);
+                }
+                // 🔹 If backend returns plain array (your current case)
+                else if (Array.isArray(data)) {
+                    setJobs(data);
+                    setTotalPages(1);
+                    setTotalJobs(data.length);
+                }
+                else {
+                    setJobs([]);
+                    setTotalPages(0);
+                    setTotalJobs(0);
+                }
+            })
+            .catch(() => {
+                setJobs([]);
+                setTotalPages(0);
+                setTotalJobs(0);
+            })
+            .finally(() => setLoading(false));
+
+    }, [page, pageSize]);
 
     const handleApply = async (jobId) => {
         await applyToJob(jobId);
-        const res = await getAvailableJobs();
-        setJobs(res.data);
+
+        getAvailableJobs(page - 1, pageSize)
+            .then((res) => {
+                const data = res?.data || {};
+                setJobs(Array.isArray(data.content) ? data.content : []);
+                setTotalPages(data.totalPages ?? 0);
+                setTotalJobs(data.totalElements ?? 0);
+            });
     };
+    // const filteredJobs = (jobs || []).filter((job) => {
+    //     const matchesTitle =
+    //         !searchTitle ||
+    //         job.title?.toLowerCase().includes(searchTitle.toLowerCase());
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            getAvailableJobs().then((res) => setJobs(res.data));
-        }, 60000);
+    //     const matchesDate =
+    //         !dateFilter ||
+    //         job.createdAt?.startsWith(dateFilter);
 
-        return () => clearInterval(interval);
-    }, []);
-
-    const [searchParams, setSearchParams] = useSearchParams();
-
-    const page = Number(searchParams.get("page") || 1);
-    const pageSize = Number(searchParams.get("pageSize") || 5);
-
-    const filteredJobs = jobs.filter((job) => {
-        const matchesTitle =
-            !searchTitle ||
-            job.title?.toLowerCase().includes(searchTitle.toLowerCase());
-
-        const matchesDate =
-            !dateFilter ||
-            job.createdAt?.startsWith(dateFilter);
-
-        return matchesTitle && matchesDate;
-    });
-    const totalJobs = filteredJobs.length;
-    const totalPages = Math.ceil(totalJobs / pageSize);
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = Math.min(startIndex + pageSize, totalJobs);
-    const paginatedJobs = filteredJobs.slice(startIndex, endIndex);
+    //     return matchesTitle && matchesDate;
+    // });
+// 🔹 Backend already paginates — DO NOT filter/slice here
+const paginatedJobs = jobs || [];
 
     const goToPage = (newPage) => {
         if (newPage < 1 || newPage > totalPages) return;
@@ -175,7 +194,7 @@ const CandidateJobsPage = () => {
                 </button>
             </div>
 
-            {jobs.length === 0 && (
+            {!loading && paginatedJobs.length === 0 && (
                 <div
                     style={{
                         marginTop: "40px",
@@ -194,7 +213,7 @@ const CandidateJobsPage = () => {
                 </div>
             )}
 
-            {jobs.length > 0 && (
+            {paginatedJobs.length > 0 && (
                 <>
 
                     <div
@@ -298,7 +317,10 @@ const CandidateJobsPage = () => {
                     >
                         {/* LEFT — COUNT */}
                         <div style={{ fontSize: "13px", color: "#6b7280" }}>
-                            Showing {totalJobs === 0 ? 0 : startIndex + 1}–{endIndex} of {totalJobs} jobs
+                            {/* Showing {totalJobs === 0 ? 0 : startIndex + 1}–{endIndex} of {totalJobs} jobs */}
+                            Showing {totalJobs === 0 ? 0 : (page - 1) * pageSize + 1}
+                            –
+                            {Math.min(page * pageSize, totalJobs)} of {totalJobs} jobs
                         </div>
 
                         {/* CENTER — PAGINATION */}
@@ -408,8 +430,4 @@ function StatusPill({ applied }) {
         </span>
     );
 }
-
-
-
-
 export default CandidateJobsPage;

@@ -3,8 +3,11 @@ import api from "./axios";
 export const getCurrentCandidate = () =>
   api.get("/candidate/me");
 
-export const getAvailableJobs = () =>
-  api.get("/candidate/jobs/availablejobs");
+// export const getAvailableJobs = () =>
+//   api.get("/candidate/jobs/availablejobs");
+// 🔹 Backend pagination enabled
+export const getAvailableJobs = (page, size) =>
+  api.get(`/candidate/jobs/availablejobs?page=${page}&size=${size}`);
 
 export const applyToJob = (jobId) =>
   api.post(`/candidate/jobs/${jobId}/apply`);
