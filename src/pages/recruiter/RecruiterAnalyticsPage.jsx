@@ -27,14 +27,24 @@ import {
   Cell,
   ResponsiveContainer,
 } from "recharts";
-import { getRecruiterJobs, getJobCandidates } from "../../api/recruiterApi";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Search,
+  Filter,
+  Calendar,
+  Briefcase,
+  Activity,
+  RotateCcw
+} from "lucide-react";
+import { getRecruiterJobs, getAllJobsCandidates } from "../../api/recruiterApi";
 
 const RecruiterAnalyticsPage = () => {
   const [jobs, setJobs] = useState([]);
   const [jobCandidatesMap, setJobCandidatesMap] = useState({});
   const [loading, setLoading] = useState(true);
-
-  const [dateRange, setDateRange] = useState("ALL"); // ALL | 7 | 30
+  const [error, setError] = useState("");
+  const [dateRange, setDateRange] = useState("30"); // ALL | 7 | 30
   const [selectedCandidate, setSelectedCandidate] = useState("ALL");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [categories, setCategories] = useState([]);
@@ -42,13 +52,13 @@ const RecruiterAnalyticsPage = () => {
   const navigate = useNavigate();
 
   const handleBarClick = (data) => {
-      console.log("BAR CLICK DATA:", data);
+    console.log("BAR CLICK DATA:", data);
     if (!data || !data.date) return;
 
     // YYYY-MM-DD already
     navigate(`/recruiter/jobs?date=${data.date}`);
   };
-  
+
   useEffect(() => {
     loadData();
   }, []);
@@ -56,20 +66,20 @@ const RecruiterAnalyticsPage = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const jobsRes = await getRecruiterJobs();
-      const jobsData = jobsRes.data || [];
-      setJobs(jobsData);
-
-      const candidateMap = {};
-      for (const job of jobsData) {
-        try {
-          const res = await getJobCandidates(job.id);
-          candidateMap[job.id] = res.data || [];
-        } catch {
-          candidateMap[job.id] = [];
-        }
+      setError("");
+      const [jobsRes, candidatesRes] = await Promise.all([
+        getRecruiterJobs(),
+        getAllJobsCandidates()
+      ]);
+      setJobs(jobsRes.data || []);
+      setJobCandidatesMap(candidatesRes.data || {});
+    } catch (err) {
+      console.error("Failed to load analytics data", err);
+      if (!err.response) {
+        setError("Network Error: Backend server is unreachable.");
+      } else {
+        setError("Failed to load analytics data.");
       }
-      setJobCandidatesMap(candidateMap);
     } finally {
       setLoading(false);
     }
@@ -242,54 +252,54 @@ const RecruiterAnalyticsPage = () => {
   ]);
 
 
+  const actionableCandidates = candidateSummary
+    .filter((c) => c.pending > 0 && Number(c.rate.replace('%', '')) < 50)
+    .sort((a, b) => b.pending - a.pending)
+    .slice(0, 5);
+
   const renderPieLabel = ({ name, percent }) =>
     `${name} (${Math.round(percent * 100)}%)`;
 
   return (
-    <div
-      style={{
-        padding: "40px 24px",
-        maxWidth: "1300px",
-        margin: "0 auto",
-      }}
-    >
-      <h1 style={{ marginBottom: "8px" }}>
-        Recruiter Analytics
-      </h1>
-      <p style={{ color: "#6b7280", marginBottom: "3px" }}>
-        Performance & reporting overview
-      </p>
-      
-      <p style={{ fontSize: "13px", color: "#6b7280" }}>
-        This page gives you a high-level overview of your recruiting activity.
-        It helps you understand how often jobs are assigned, how candidates respond,
-        and which candidates or time periods need follow-up or attention.
-      </p>
+    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:tracking-tight mb-1">
+          Recruiter Analytics
+        </h1>
+        <p className="text-sm text-gray-500 mb-2">
+          Performance & reporting overview
+        </p>
+        <p className="text-sm text-gray-500 max-w-3xl">
+          This page gives you a high-level overview of your recruiting activity.
+          It helps you understand how often jobs are assigned, how candidates respond,
+          and which candidates or time periods need follow-up or attention.
+        </p>
+      </div>
+
+      {error && (
+        <div className="mb-8 bg-red-50 border-l-4 border-red-400 p-4 rounded-md flex items-center gap-3">
+          <AlertTriangle className="h-5 w-5 text-red-500" />
+          <div>
+            <p className="text-sm font-bold text-red-800">Connection Failed</p>
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
+
       {/* KPI CARDS */}
-      <div style={kpiGrid}>
-        <KPI title="Total Jobs" value={jobs.length} />
-        <KPI title="Jobs Today" value={jobsToday} />
-        <KPI title="Jobs (Last 7 Days)" value={jobsLast7Days} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+        <KPI title="Total Jobs" value={jobs.length} icon={<Briefcase className="w-5 h-5 text-indigo-600" />} />
+        <KPI title="Jobs Today" value={jobsToday} icon={<Calendar className="w-5 h-5 text-indigo-600" />} />
+        <KPI title="Jobs (Last 7 Days)" value={jobsLast7Days} icon={<Activity className="w-5 h-5 text-indigo-600" />} />
         <KPI
-          title={
-            <span>
-              Application Rate{" "}
-              <span
-                title="Calculated as: (Total Applied Jobs ÷ Total Assigned Jobs) × 100"
-                style={{ cursor: "help", color: "#1465f0" }}
-              >
-                ⓘ
-              </span>
-            </span>
-          }
+          title={"Application Rate"}
+          icon={<span title="Calculated as: (Total Applied Jobs ÷ Total Assigned Jobs) × 100" className="cursor-help text-indigo-600 font-bold bg-indigo-50 rounded-full w-5 h-5 flex items-center justify-center text-xs">i</span>}
           value={
-            applicationBreakdown.applied +
-              applicationBreakdown.pending === 0
+            applicationBreakdown.applied + applicationBreakdown.pending === 0
               ? "0%"
               : `${Math.round(
                 (applicationBreakdown.applied /
-                  (applicationBreakdown.applied +
-                    applicationBreakdown.pending)) *
+                  (applicationBreakdown.applied + applicationBreakdown.pending)) *
                 100
               )}%`
           }
@@ -297,49 +307,42 @@ const RecruiterAnalyticsPage = () => {
       </div>
 
       {/* FILTERS */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "24px",
-          flexWrap: "wrap",
-          gap: "16px",
-        }}
-      >
+      <div className="bg-white border ring-1 ring-gray-900/5 shadow-sm rounded-xl p-4 md:p-5 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         {/* LEFT: Context filters */}
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <label style={{ fontSize: "13px", color: "#6b7280" }}>
-            🗂️ Job Category
-          </label>
-
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-          >
-            <option value="ALL">All Job Categories</option>
-            {[...new Set(jobs.map((j) => j.categoryName))].map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <Filter className="w-4 h-4 text-gray-400" />
+            <span className="font-medium hidden sm:inline">Category:</span>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="block w-48 rounded-md border-0 py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6"
+            >
+              <option value="ALL">All Categories</option>
+              {[...new Set(jobs.map((j) => j.categoryName))].filter(Boolean).map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* RIGHT: Global time filter */}
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <label style={{ fontSize: "13px", color: "#6b7280" }}>
-              🕒 Time Range
-          </label>
-
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value)}
-          >
-            <option value="ALL">All Time</option>
-            <option value="7">Last 7 Days</option>
-            <option value="30">Last 30 Days</option>
-          </select>
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center w-full md:w-auto">
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <Calendar className="w-4 h-4 text-gray-400" />
+            <span className="font-medium hidden sm:inline">Time Range:</span>
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="block w-40 rounded-md border-0 py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6"
+            >
+              <option value="ALL">All Time</option>
+              <option value="7">Last 7 Days</option>
+              <option value="30">Last 30 Days</option>
+            </select>
+          </div>
 
           <button
             onClick={() => {
@@ -348,83 +351,67 @@ const RecruiterAnalyticsPage = () => {
               setSelectedCandidate("ALL");
               setCandidateSearch("");
             }}
-            style={{
-              fontSize: "12px",
-              padding: "6px 10px",
-              borderRadius: "6px",
-              border: "1px solid #e5e7eb",
-              background: "#fff",
-              cursor: "pointer",
-            }}
+            className="inline-flex items-center justify-center gap-2 bg-white px-3 py-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 rounded-md transition-colors w-full sm:w-auto"
           >
-            🔄 Reset Filters
+            <RotateCcw className="w-3.5 h-3.5" />
+            Reset Filters
           </button>
         </div>
       </div>
 
-      <p style={{ fontSize: "13px", color: "#6b7280" }}>
-        Analytics are based on <strong>jobs assigned</strong>.
-        Candidates appear only if they have at least one job.
+      <p className="text-xs text-gray-500 mb-8 italic">
+        Analytics are based on <strong>jobs assigned</strong>. Candidates appear only if they have at least one job.
       </p>
 
       {/* CHARTS */}
-      <div style={chartGrid}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
         <ChartCard title="Jobs Assigned to Candidates (Daily)">
           {jobs.length === 0 && (
-            <p style={{ fontSize: "14px", color: "#6b7280" }}>
-              No data available yet
-            </p>
+            <p className="text-sm text-gray-500">No data available yet</p>
           )}
-          <p style={{ fontSize: "12px", color: "#6b7280" }}>
+          <p className="text-xs text-gray-500 mb-4 h-8">
             Total number of jobs <strong>assigned by you</strong> per day
             <br />
-            <span style={{ fontStyle: "italic" }}>
+            <span className="italic">
               (Across all candidates · filtered by category & time range)
             </span>
           </p>
 
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={jobsAssignedByDate}>
-              <XAxis dataKey="date" />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-
-              <Bar
-                dataKey="count"
-                fill="#2563eb"
-                cursor="pointer"
-                onClick={(data) => handleBarClick(data)}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={jobsAssignedByDate}>
+                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <Bar
+                  dataKey="count"
+                  fill="#4f46e5"
+                  cursor="pointer"
+                  onClick={(data) => handleBarClick(data)}
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </ChartCard>
 
-
         <ChartCard title="Application Status Overview">
-            {/* Candidate filter INSIDE card */}
-          <div style={{ marginBottom: "12px" }}>
-            <label
-              style={{
-                fontSize: "12px",
-                color: "#6b7280",
-                display: "block",
-                marginBottom: "4px",
-              }}
-            >
+          {/* Candidate filter INSIDE card */}
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-gray-700 mb-1">
               👤 Candidate (Application Status)
             </label>
-
             <select
               value={selectedCandidate}
               onChange={(e) => setSelectedCandidate(e.target.value)}
+              className="block w-full max-w-xs rounded-md border-0 py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6"
             >
               <option value="ALL">All Candidates</option>
               {[...new Set(
                 Object.values(jobCandidatesMap)
                   .flat()
                   .map((c) => c.candidateEmail)
-              )].map((email) => (
+              )].filter(Boolean).map((email) => (
                 <option key={email} value={email}>
                   {email}
                 </option>
@@ -432,126 +419,160 @@ const RecruiterAnalyticsPage = () => {
             </select>
           </div>
 
-          {jobs.length === 0 && (
-            <p style={{ fontSize: "14px", color: "#6b7280" }}>
-              No data available yet
-            </p>
-          )}
-
-          <p style={{ fontSize: "13px", color: "#6b7280", marginBottom: "8px" }}>
+          <p className="text-xs text-gray-500 mb-4 h-4">
             Candidate application progress
           </p>
-          {applicationBreakdown.applied + applicationBreakdown.pending === 0 ? (
-            <p style={{ fontSize: "13px", color: "#6b7280" }}>
-              No application activity for the selected filters.
-            </p>
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={[
-                    { name: "Applied", value: applicationBreakdown.applied },
-                    { name: "Pending", value: applicationBreakdown.pending },
-                  ]}
-                  dataKey="value"
-                  innerRadius={60}
-                  outerRadius={90}
-                  label={renderPieLabel}
-                >
-                  <Cell fill="#22c55e" />
-                  <Cell fill="#facc15" />
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-          
+
+          <div className="h-64 flex items-center justify-center">
+            {applicationBreakdown.applied + applicationBreakdown.pending === 0 ? (
+              <p className="mt-1 text-sm text-gray-500">
+                No application activity for the selected filters.
+              </p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: "Applied", value: applicationBreakdown.applied },
+                      { name: "Pending", value: applicationBreakdown.pending },
+                    ]}
+                    dataKey="value"
+                    innerRadius={60}
+                    outerRadius={90}
+                    label={renderPieLabel}
+                    labelLine={false}
+                  >
+                    <Cell fill="#10b981" />
+                    <Cell fill="#f59e0b" />
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </ChartCard>
       </div>
 
+      {/* ACTION NEEDED SECTION */}
+      {actionableCandidates.length > 0 && (
+        <div className="mb-12">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+            </span>
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              Action Needed: Unresponsive Candidates
+            </h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Candidates with multiple pending assignments and a low overall application rate. Consider following up with them.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {actionableCandidates.map((c) => (
+              <div key={c.email} className="bg-white border border-red-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
+                <div className="font-semibold text-gray-900 truncate mb-1">{c.email}</div>
+                <div className="flex justify-between text-sm text-gray-600 mb-4 mt-2">
+                  <div className="bg-red-50 px-2.5 py-1 rounded-md text-red-700 font-medium text-xs border border-red-100">Pending: {c.pending}</div>
+                  <div className="bg-gray-50 px-2.5 py-1 rounded-md text-gray-700 font-medium text-xs border border-gray-200">Rate: {c.rate}</div>
+                </div>
+                <button
+                  onClick={() => navigate(`/recruiter/candidates/${encodeURIComponent(c.email)}/activity`)}
+                  className="w-full text-center text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg py-2 transition-colors flex items-center justify-center gap-2"
+                >
+                  View Activity
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* CANDIDATE PERFORMANCE SUMMARY */}
-      <div style={{ marginTop: "48px" }}>
-        <h2 style={{ marginBottom: "6px" }}>
+      <div>
+        <h2 className="text-xl font-bold leading-7 text-gray-900 sm:truncate sm:tracking-tight mb-2">
           Candidate Performance Summary
         </h2>
-
-        <p style={{ fontSize: "13px", color: "#6b7280", marginBottom: "12px" }}>
+        <p className="text-sm text-gray-500 mb-6 max-w-3xl">
           Breakdown of how each candidate responded to jobs assigned by you.
           <br />
           Helps identify follow-ups, inactive candidates, and overall response quality.
         </p>
 
-        <input
-          type="text"
-          placeholder="🔍 Search by candidate email"
-          value={candidateSearch}
-          onChange={(e) => setCandidateSearch(e.target.value)}
-          style={{
-            marginBottom: "12px",
-            padding: "8px 10px",
-            width: "260px",
-            borderRadius: "8px",
-            border: "1px solid #e5e7eb",
-          }}
-        />
-        <p style={{ fontSize: "12px", color: "#6b7280", marginBottom: "6px" }}>
+        <div className="mb-4 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by candidate email..."
+            value={candidateSearch}
+            onChange={(e) => setCandidateSearch(e.target.value)}
+            className="block w-full sm:w-80 rounded-md border-0 py-2 pl-9 pr-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+          />
+        </div>
+        <p className="text-xs text-gray-500 mb-3 italic">
           Sorted implicitly by engagement (high response → low response)
         </p>
 
-        <div style={tableWrapper}>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <th style={th}>Candidate</th>
-                <th style={th}>Jobs Assigned</th>
-                <th style={th}>Applied</th>
-                <th style={th}>Pending</th>
-                <th style={th}>Application Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {candidateSummary.length === 0 && (
+        <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
                 <tr>
-                  <td colSpan={5} style={{ ...td, textAlign: "center", color: "#6b7280" }}>
-                    No candidates match the selected filters
-                  </td>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Candidate</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jobs Assigned</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applied</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pending</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Application Rate</th>
                 </tr>
-              )}
-
-              {candidateSummary
-                .filter((c) =>
-                  c.email.toLowerCase().includes(candidateSearch.toLowerCase())
-                )
-                .map((c) => (
-                  <tr key={c.email}>
-                    {/* <td style={td}>{c.email}</td> */}
-                    <td
-                      style={{ ...td, cursor: "pointer", color: "#2563eb" }}
-                      onClick={() =>
-                        navigate(
-                          `/recruiter/candidates/${encodeURIComponent(c.email)}/activity`
-                        )
-                      }
-                    >
-                      {c.email}
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {candidateSummary.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-500">
+                      No candidates match the selected filters
                     </td>
-                    <td style={td}>{c.assigned}</td>
-                    <td style={td}>{c.applied}</td>
-                    <td style={td}>{c.pending}</td>
-                    <td style={td}>{c.rate}</td>
                   </tr>
-                ))}
+                )}
 
-            </tbody>
-
-          </table>
+                {candidateSummary
+                  .filter((c) =>
+                    c.email.toLowerCase().includes(candidateSearch.toLowerCase())
+                  )
+                  .map((c) => (
+                    <tr key={c.email} className="hover:bg-gray-50 transition-colors">
+                      <td
+                        className="whitespace-nowrap px-6 py-4 text-sm font-medium text-indigo-600 hover:text-indigo-900 cursor-pointer"
+                        onClick={() =>
+                          navigate(
+                            `/recruiter/candidates/${encodeURIComponent(c.email)}/activity`
+                          )
+                        }
+                      >
+                        {c.email}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">{c.assigned}</td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                        <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                          {c.applied}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                        <span className="inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">
+                          {c.pending}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900 font-semibold">{c.rate}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-
-
     </div>
-
   );
 };
 
@@ -559,86 +580,27 @@ const RecruiterAnalyticsPage = () => {
    UI HELPERS
 ========================= */
 
-const KPI = ({ title, value }) => (
-  <div style={kpiCard}>
-    <div style={{ fontSize: "14px", color: "#6b7280" }}>
-      {title}
+const KPI = ({ title, value, icon }) => (
+  <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm overflow-hidden flex flex-col justify-center">
+    <div className="flex items-center justify-between mb-4">
+      <div className="text-sm font-medium text-gray-500">
+        {title}
+      </div>
+      {icon && <div className="p-2 bg-indigo-50 rounded-lg">{icon}</div>}
     </div>
-    <div
-      style={{
-        fontSize: "32px",
-        fontWeight: 600,
-        marginTop: "8px",
-      }}
-    >
+    <div className="text-3xl font-bold text-gray-900">
       {value}
     </div>
   </div>
 );
 
 const ChartCard = ({ title, children }) => (
-  <div style={chartCard}>
-    <h3 style={{ marginBottom: "12px" }}>{title}</h3>
-    {children}
+  <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm flex flex-col">
+    <h3 className="text-lg font-bold text-gray-900 mb-4">{title}</h3>
+    <div className="flex-grow flex flex-col">
+      {children}
+    </div>
   </div>
 );
-
-/* =========================
-   STYLES
-========================= */
-
-const kpiGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: "20px",
-  marginBottom: "40px",
-};
-
-const kpiCard = {
-  background: "#ffffff",
-  border: "1px solid #e5e7eb",
-  borderRadius: "14px",
-  padding: "24px",
-  textAlign: "center",
-};
-
-const chartGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))",
-  gap: "24px",
-};
-
-const chartCard = {
-  background: "#ffffff",
-  border: "1px solid #e5e7eb",
-  borderRadius: "14px",
-  padding: "20px",
-};
-
-const tableWrapper = {
-  border: "1px solid #e5e7eb",
-  borderRadius: "12px",
-  overflow: "hidden",
-  background: "#ffffff",
-};
-
-const tableStyle = {
-  width: "100%",
-  borderCollapse: "collapse",
-};
-
-const th = {
-  padding: "14px",
-  background: "#f9fafb",
-  textAlign: "left",
-  fontSize: "14px",
-  fontWeight: 600,
-};
-
-const td = {
-  padding: "12px 14px",
-  borderTop: "1px solid #e5e7eb",
-  fontSize: "14px",
-};
 
 export default RecruiterAnalyticsPage;
