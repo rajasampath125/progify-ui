@@ -1,9 +1,12 @@
 import { NavLink, Link, useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getCurrentCandidate } from "../../api/candidateApi";
 import { useAuth } from "../../auth/useAuth";
 import { getCurrentAdmin } from "../../api/adminApi";
 import { getCurrentRecruiter } from "../../api/recruiterApi";
+import { LogOut, User, ChevronDown } from "lucide-react";
+import { logoutAndClear } from "../../api/axios";
+import clouvrLogo from "../../images/clouvr-logo1.webp";
 
 /* ===================== */
 /* HeaderNavLink (CUSTOM) */
@@ -12,21 +15,12 @@ const HeaderNavLink = ({ to, children }) => {
     return (
         <NavLink
             to={to}
-            style={({ isActive }) => ({
-                color: isActive ? "#a1b7e7" : "#e5e7eb",
-                textDecoration: isActive ? "underline" : "none",
-                fontSize: "14px",
-                fontWeight: 500,
-                transition: "color 0.2s ease",
-            })}
-            onMouseEnter={(e) => {
-                e.target.style.color = "#7195e2";
-            }}
-            onMouseLeave={(e) => {
-                if (!e.target.getAttribute("aria-current")) {
-                    e.target.style.color = "#e5e7eb";
-                }
-            }}
+            className={({ isActive }) =>
+                `text-sm font-medium transition-colors px-3 py-2 rounded-md ${isActive
+                    ? "bg-indigo-50 text-indigo-700"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                }`
+            }
         >
             {children}
         </NavLink>
@@ -47,8 +41,6 @@ const MENU_CONFIG = {
         { label: "Jobs", path: "/recruiter/jobs" },
         { label: "Candidates", path: "/recruiter/candidates" },
         { label: "Analytics", path: "/recruiter/analytics" },
-        // { label: "CandidateActivityPage", path: "/recruiter/candidates/:email/activity" },
-        
     ],
     ADMIN: [
         { label: "Dashboard", path: "/admin/dashboard" },
@@ -62,14 +54,12 @@ const MENU_CONFIG = {
 const Header = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const dropdownRef = useRef(null);
 
     /* ===================== */
     /* AUTH + ROLE DETECTION */
     /* ===================== */
-    // const authRaw = localStorage.getItem("auth");
-    // const auth = authRaw ? JSON.parse(authRaw) : null;
     const { auth, loading } = useAuth();
-
 
     const roleFromPath =
         location.pathname.startsWith("/candidate")
@@ -82,12 +72,10 @@ const Header = () => {
 
     const role = auth?.role || roleFromPath;
 
-    const isAuthPage =
-        location.pathname.startsWith("/login")
-    //location.pathname.startsWith("/register");
+    const isAuthPage = location.pathname.startsWith("/login");
 
     /* ===================== */
-    /* PROFILE (CANDIDATE) */
+    /* PROFILE LOADING      */
     /* ===================== */
     const [profile, setProfile] = useState(null);
     const [open, setOpen] = useState(false);
@@ -97,35 +85,23 @@ const Header = () => {
 
         const loadProfile = async () => {
             try {
-                // ===== CANDIDATE (UNCHANGED) =====
                 if (role === "CANDIDATE") {
                     const cached = localStorage.getItem("candidateProfile");
-                    if (cached) {
-                        setProfile(JSON.parse(cached));
-                        return;
-                    }
+                    if (cached) return setProfile(JSON.parse(cached));
                     const res = await getCurrentCandidate();
                     localStorage.setItem("candidateProfile", JSON.stringify(res.data));
                     setProfile(res.data);
                 }
-                // ===== ADMIN =====
                 if (role === "ADMIN") {
                     const cached = localStorage.getItem("adminProfile");
-                    if (cached) {
-                        setProfile(JSON.parse(cached));
-                        return;
-                    }
+                    if (cached) return setProfile(JSON.parse(cached));
                     const res = await getCurrentAdmin();
                     localStorage.setItem("adminProfile", JSON.stringify(res.data));
                     setProfile(res.data);
                 }
-                // ===== RECRUITER (FUTURE-READY) =====
                 if (role === "RECRUITER") {
                     const cached = localStorage.getItem("recruiterProfile");
-                    if (cached) {
-                        setProfile(JSON.parse(cached));
-                        return;
-                    }
+                    if (cached) return setProfile(JSON.parse(cached));
                     const res = await getCurrentRecruiter();
                     localStorage.setItem("recruiterProfile", JSON.stringify(res.data));
                     setProfile(res.data);
@@ -137,175 +113,171 @@ const Header = () => {
         loadProfile();
     }, [role]);
 
+    // Close dropdown on route change
+    useEffect(() => {
+        setOpen(false);
+    }, [location.pathname]);
+
+    // Close dropdown on click outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     /* ===================== */
     /* LOGOUT */
     /* ===================== */
     const { setAuth } = useAuth();
     const logout = () => {
-        // 🔥 CLEAR AUTH CONTEXT (THIS WAS MISSING)
+        // Revokes the refresh token server-side, then clears storage & redirects
+        logoutAndClear();
         setAuth(null);
-
-        // clear storage
-        localStorage.removeItem("auth");
-        localStorage.removeItem("currentUser");
-        localStorage.removeItem("candidateProfile");
-        localStorage.removeItem("adminProfile");
-        localStorage.removeItem("recruiterProfile");
-
-        // redirect to HOME (not login page)
-        navigate("/");
     };
 
+    const userInitials = profile?.name
+        ? profile.name.split(" ").map((n) => n[0]).join("").toUpperCase().substring(0, 2)
+        : "U";
+
+    const userName = profile?.name || auth?.email?.split('@')[0] || "User";
+
+    const [showLogoutPopup, setShowLogoutPopup] = useState(false);
+
     return (
-        <header
-            style={{
-                background: "#5e6a83",
-                color: "#fff",
-                padding: "14px 24px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                flexWrap: "wrap",
-            }}
-        >
-            {/* LEFT */}
-            <Link
-                to="https://www.progifytech.com"
-                style={{ display: "flex", alignItems: "center" }}
-            >
-                <img
-                    src="https://www.progifytech.com/assets/images/logo.png"
-                    alt="ProgifyTech Logo"
-                    style={{ height: "46px" }}
-                />
-            </Link>
-
-            {/* CENTER NAV */}
-            <nav style={{ display: "flex", gap: "16px" }}>
-                {!isAuthPage && !loading && auth && role &&
-                    MENU_CONFIG[role]?.map((item) => (
-                        <HeaderNavLink key={item.path} to={item.path}>
-                            {item.label}
-                        </HeaderNavLink>
-                    ))}
-            </nav>
-
-
-            {/* RIGHT (USER DROPDOWN) */}
-            {!isAuthPage && auth && (
-                <div style={{ position: "relative" }}>
-                    <div
-                        onClick={() => setOpen((prev) => !prev)}
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                            background: "#facc15",
-                            padding: "6px 10px",
-                            borderRadius: "999px",
-                            cursor: "pointer",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            color: "#1f2937",
-                        }}
-                    >
-                        <div
-                            style={{
-                                width: "28px",
-                                height: "28px",
-                                borderRadius: "50%",
-                                background: "#ffffff",
-                                color: "#111827",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: "12px",
-                                fontWeight: 700,
-                            }}
-                        >
-                            {profile?.name
-                                ? profile.name
-                                    .split(" ")
-                                    .map((n) => n[0])
-                                    .join("")
-                                    .toUpperCase()
-                                : "U"}
+        <>
+            <header className="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between items-center h-16">
+                        {/* LEFT: LOGO */}
+                        <div className="flex-shrink-0 flex items-center">
+                            <Link to="https://www.clouvr.com" className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl shadow-inner hover:bg-slate-800 transition-colors">
+                                <img
+                                    src={clouvrLogo}
+                                    alt="Clouvr Logo"
+                                    className="h-8 w-auto sm:h-10"
+                                />
+                            </Link>
                         </div>
-                        <span style={{ fontSize: "13px" }}>
-                            {profile?.name || auth?.email || "User"}
-                        </span>
+
+                        {/* CENTER NAV */}
+                        <nav className="hidden md:flex flex-1 justify-center space-x-2">
+                            {!isAuthPage && !loading && auth && role &&
+                                MENU_CONFIG[role]?.map((item) => (
+                                    <HeaderNavLink key={item.path} to={item.path}>
+                                        {item.label}
+                                    </HeaderNavLink>
+                                ))}
+
+                            {/* Global Links — only for non-authenticated visitors */}
+                            {!isAuthPage && !auth && (
+                                <HeaderNavLink to="/contact">
+                                    Contact Us
+                                </HeaderNavLink>
+                            )}
+                        </nav>
+
+                        {/* RIGHT: USER DROPDOWN */}
+                        <div className="flex items-center gap-4">
+                            {!isAuthPage && auth && (
+                                <div className="relative" ref={dropdownRef}>
+                                    <button
+                                        onClick={() => setOpen((prev) => !prev)}
+                                        className="flex items-center gap-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 transition px-3 py-1.5 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                    >
+                                        <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-bold">
+                                            {userInitials}
+                                        </div>
+                                        <span className="text-sm font-medium text-gray-700 max-w-[120px] truncate hidden sm:block">
+                                            {userName}
+                                        </span>
+                                        <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {open && (
+                                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+                                            <div className="px-4 py-3 border-b border-gray-100">
+                                                <p className="text-sm text-gray-500">Signed in as</p>
+                                                <p className="text-sm font-medium text-gray-900 truncate">
+                                                    {auth?.email || userName}
+                                                </p>
+                                            </div>
+
+                                            <button
+                                                onClick={() => {
+                                                    setOpen(false);
+                                                    navigate(`/${role.toLowerCase()}/profile`);
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                                            >
+                                                <User className="w-4 h-4 text-gray-400" />
+                                                My Profile
+                                            </button>
+
+                                            <button
+                                                onClick={() => setShowLogoutPopup(true)}
+                                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                                            >
+                                                <LogOut className="w-4 h-4 text-red-500" />
+                                                Log out
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
+                </div>
+            </header>
 
-                    {open && (
-                        <div
-                            style={{
-                                position: "absolute",
-                                right: 0,
-                                top: "44px",
-                                background: "#3d3d3d",
-                                borderRadius: "8px",
-                                boxShadow: "0 10px 15px rgba(0,0,0,0.15)",
-                                width: "160px",
-                                zIndex: 100,
-                            }}
-                        >
-                            {role === "CANDIDATE" && (
-                                <div
-                                    style={{
-                                        padding: "10px 14px",
-                                        fontSize: "14px",
-                                        cursor: "pointer",
-                                        borderBottom: "1px solid #fafafa",
-                                    }}
-                                    onClick={() => navigate("/candidate/profile")}
-                                >
-                                    My Profile
+            {/* LOGOUT CONFIRMATION MODAL */}
+            {showLogoutPopup && (
+                <div className="relative z-[100]">
+                    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+                    <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
+                        <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                            <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-sm">
+                                <div className="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+                                    <div className="sm:flex sm:items-start">
+                                        <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                                            <LogOut className="h-6 w-6 text-red-500" aria-hidden="true" />
+                                        </div>
+                                        <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+                                            <h3 className="text-base font-semibold leading-6 text-gray-900" id="modal-title">Sign out</h3>
+                                            <div className="mt-2 text-sm text-gray-500">
+                                                <p>Are you sure you want to sign out?</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            )}
-                            {role === "ADMIN" && (
-                                <div
-                                    style={{
-                                        padding: "10px 14px",
-                                        fontSize: "14px",
-                                        cursor: "pointer",
-                                        borderBottom: "1px solid #fafafa",
-                                    }}
-                                    onClick={() => navigate("/admin/profile")}
-                                >
-                                    My Profile
+                                <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                                    <button
+                                        type="button"
+                                        className="inline-flex w-full justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 sm:ml-3 sm:w-auto"
+                                        onClick={() => {
+                                            setShowLogoutPopup(false);
+                                            logout();
+                                        }}
+                                    >
+                                        Yes, sign out
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto"
+                                        onClick={() => setShowLogoutPopup(false)}
+                                    >
+                                        Cancel
+                                    </button>
                                 </div>
-                            )}
-                            {role === "RECRUITER" && (
-                                <div
-                                    style={{
-                                        padding: "10px 14px",
-                                        fontSize: "14px",
-                                        cursor: "pointer",
-                                        borderBottom: "1px solid #fafafa",
-                                    }}
-                                    onClick={() => navigate("/recruiter/profile")}
-                                >
-                                    My Profile
-                                </div>
-                            )}
-
-                            <div
-                                style={{
-                                    padding: "10px 14px",
-                                    fontSize: "14px",
-                                    cursor: "pointer",
-                                    color: "#fafafa",
-                                }}
-                                onClick={logout}
-                            >
-                                Log out
                             </div>
                         </div>
-                    )}
+                    </div>
                 </div>
             )}
-        </header>
+        </>
     );
 };
 

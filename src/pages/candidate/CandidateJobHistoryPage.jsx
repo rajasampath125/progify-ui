@@ -1,13 +1,143 @@
 import { useEffect, useState } from "react";
 import {
   getAllCandidateJobs,
-  applyToJob,
   downloadResume,
 } from "../../api/candidateApi";
 import { useSearchParams } from "react-router-dom";
+import {
+  Download,
+  ExternalLink,
+  History,
+  Search,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  AlertTriangle,
+  Inbox,
+} from "lucide-react";
+import TableSkeleton from "../../components/ui/TableSkeleton";
+import EmptyState from "../../components/ui/EmptyState";
 
+/* =====================
+   DESCRIPTION MODAL
+===================== */
+function DescriptionModal({ job, onClose }) {
+  if (!job) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col animate-slide-up"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between p-6 border-b border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-900 pr-4">{job.title}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-6 overflow-y-auto">
+          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+            {job.description}
+          </p>
+        </div>
+        <div className="flex justify-end p-4 border-t border-gray-100">
+          <button onClick={onClose} className="btn-secondary">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =====================
+   PAGINATION
+===================== */
+function Pagination({ page, totalPages, totalElements, pageSize, goToPage, changePageSize }) {
+  return (
+    <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
+      <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+        <p className="text-sm text-gray-700">
+          Showing{" "}
+          <span className="font-semibold">
+            {totalElements === 0 ? 0 : (page - 1) * pageSize + 1}
+          </span>{" "}
+          to{" "}
+          <span className="font-semibold">
+            {Math.min(page * pageSize, totalElements)}
+          </span>{" "}
+          of <span className="font-semibold">{totalElements}</span> results
+        </p>
+
+        <div className="flex items-center gap-4">
+          {/* page size */}
+          <select
+            value={pageSize}
+            onChange={(e) => changePageSize(Number(e.target.value))}
+            className="filter-input"
+          >
+            <option value={5}>5 / page</option>
+            <option value={10}>10 / page</option>
+            <option value={20}>20 / page</option>
+          </select>
+
+          {/* prev/next */}
+          <nav className="isolate inline-flex -space-x-px rounded-lg shadow-sm">
+            <button
+              onClick={() => goToPage(page - 1)}
+              disabled={page === 1}
+              className="relative inline-flex items-center rounded-l-lg px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 bg-white select-none">
+              {page} / {totalPages || 1}
+            </span>
+            <button
+              onClick={() => goToPage(page + 1)}
+              disabled={page === totalPages || totalPages === 0}
+              className="relative inline-flex items-center rounded-r-lg px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </nav>
+        </div>
+      </div>
+
+      {/* Mobile */}
+      <div className="flex sm:hidden w-full justify-between items-center mt-3">
+        <button
+          onClick={() => goToPage(page - 1)}
+          disabled={page === 1}
+          className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+        </button>
+        <span className="text-sm text-gray-600 font-medium bg-gray-50 px-3 py-1.5 rounded-md">
+          {page} / {totalPages || 1}
+        </span>
+        <button
+          onClick={() => goToPage(page + 1)}
+          disabled={page === totalPages || totalPages === 0}
+          className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Next <ChevronRight className="w-4 h-4 ml-1" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* =====================
+   PAGE
+===================== */
 const CandidateJobHistoryPage = () => {
   const [jobs, setJobs] = useState([]);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedJob, setSelectedJob] = useState(null);
@@ -20,94 +150,71 @@ const CandidateJobHistoryPage = () => {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("");
 
-
   useEffect(() => {
     loadJobs();
-  }, []);
-  
+  }, [page, pageSize, searchTitle, statusFilter, dateFilter]);
+
   const loadJobs = async () => {
     try {
       setLoading(true);
       setError("");
-      const res = await getAllCandidateJobs();
-      setJobs(res.data);
+      const res = await getAllCandidateJobs(page - 1, pageSize, searchTitle, statusFilter, dateFilter);
+      setJobs(res.data?.content || []);
+      setTotalPages(res.data?.totalPages || 0);
+      setTotalElements(res.data?.totalElements || 0);
     } catch (err) {
       console.error("Failed to load candidate jobs", err);
-      setError("Failed to load jobs");
+      if (!err.response) {
+        setError("Network Error: Backend server is unreachable.");
+      } else {
+        setError("Failed to load your job history.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // =====================
-  // FILTERED JOBS (IMPORTANT)
-  // =====================
-  const filteredJobs = jobs.filter((job) => {
-    const matchesTitle =
-      job.title?.toLowerCase().includes(searchTitle.toLowerCase());
+  const handleDownload = async (job) => {
+    try {
+      const response = await downloadResume(job.jobId);
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
 
-    const matchesStatus =
-      statusFilter === "ALL" ||
-      (job.applicationStatus ?? "NOT_APPLIED") === statusFilter;
+      // Generate filename based on candidate name and job title
+      let candidateName = "Candidate";
+      try {
+        const profileObjStr = localStorage.getItem("candidateProfile");
+        if (profileObjStr) {
+          const profile = JSON.parse(profileObjStr);
+          if (profile.name) {
+            candidateName = profile.name;
+          }
+        }
+      } catch (e) {
+        console.error("Could not parse profile from localStorage", e);
+      }
 
-    const matchesDate =
-      !dateFilter || job.appliedAt?.startsWith(dateFilter);
+      const safeCandidateName = candidateName.replace(/[^a-zA-Z0-9]/g, "_");
+      const safeJobTitle = job.title ? job.title.replace(/[^a-zA-Z0-9]/g, "_") : "Job_Details_Document";
+      const fileName = `${safeCandidateName}_${safeJobTitle}.docx`;
 
-    return matchesTitle && matchesStatus && matchesDate;
-  });
-
-const handleDownload = async (jobId) => {
-  try {
-    const response = await downloadResume(jobId);
-
-    const blob = new Blob([response.data], {
-      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    });
-
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-
-    // 🔹 Extract filename from backend header
-    const contentDisposition = response.headers["content-disposition"];
-    let fileName = "resume.docx";
-
-    if (contentDisposition) {
-      const match = contentDisposition.match(/filename="(.+)"/);
-      if (match?.length === 2) {
-        fileName = match[1];
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Download error:", error);
+      if (error.response?.status === 410) {
+        alert("Resume expired. Please contact recruiter.");
+      } else {
+        alert("Failed to download resume");
       }
     }
-
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    window.URL.revokeObjectURL(url);
-  } catch (error) {
-    console.error("Download error:", error);
-    if (error.response?.status === 410) {
-      alert("Resume expired. Please contact recruiter.");
-    } else {
-      alert("Failed to download resume");
-    }
-  }
-};
-
-  const totalJobs = filteredJobs.length;
-  const totalPages = Math.ceil(totalJobs / pageSize);
-  const startIndex = (page - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalJobs);
-  const paginatedJobs = filteredJobs.slice(startIndex, endIndex);
-
-  const isMobile = window.innerWidth < 768;
-
-  const updateUrl = (page, size) => {
-    const params = new URLSearchParams();
-    params.set("page", page);
-    params.set("pageSize", size);
-    window.history.replaceState(null, "", `?${params.toString()}`);
   };
 
   const goToPage = (p) => {
@@ -119,521 +226,239 @@ const handleDownload = async (jobId) => {
     setSearchParams({ page: 1, pageSize: size });
   };
 
+  const handleClear = () => {
+    setSearchTitle("");
+    setStatusFilter("ALL");
+    setDateFilter("");
+    setSearchParams({ page: 1, pageSize });
+  };
+
   return (
-    <div
-      style={{
-        padding: "30px 40px",
-        maxWidth: "100%",
-        margin: "0 auto",
-      }}
-    >
-      {/* <a href="/candidate/dashboard">← Back to Dashboard</a> */}
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 animate-fade-in">
 
-      <h2 style={{ margin: "24px 0" }}>All Jobs</h2>
+      {/* DESCRIPTION MODAL */}
+      <DescriptionModal job={selectedJob} onClose={() => setSelectedJob(null)} />
 
-      {loading && <p>Loading jobs...</p>}
-
-      {!loading && error && jobs.length === 0 && (
-        <p style={{ color: "red" }}>{error}</p>
-      )}
-
-      {!loading && jobs.length === 0 && (
-        <p>No jobs assigned yet.</p>
-      )}
-
-      <div
-        style={{
-          display: "flex",
-          gap: "12px",
-          marginBottom: "20px",
-          padding: "16px",
-          background: "#f9fafb",
-          border: "1px solid #e5e7eb",
-          borderRadius: "10px",
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <input
-          placeholder="Search by job title"
-          value={searchTitle}
-          onChange={(e) => setSearchTitle(e.target.value)}
-          style={filterInput}
-        />
-
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          style={filterSelect}
-        >
-          <option value="ALL">All Status</option>
-          <option value="APPLIED">Applied</option>
-          <option value="NOT_APPLIED">Not Applied</option>
-        </select>
-
-        <input
-          type="date"
-          value={dateFilter}
-          onChange={(e) => setDateFilter(e.target.value)}
-          style={filterInput}
-        />
-
-        <button
-          style={filterClearBtn}
-          onClick={() => {
-            setSearchTitle("");
-            setStatusFilter("ALL");
-            setDateFilter("");
-          }}
-        >
-          Clear
-        </button>
+      {/* PAGE HEADER */}
+      <div className="sm:flex sm:items-center sm:justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-indigo-100 rounded-xl">
+            <History className="w-6 h-6 text-indigo-600" />
+          </div>
+          <div>
+            <h1 className="page-header">All Jobs</h1>
+            <p className="page-subheader">Your complete job application history.</p>
+          </div>
+        </div>
       </div>
 
-      {/*DESKTOP VIEW */}
-      {!loading && jobs.length > 0 && !isMobile && (
-        <div >
-          <table
-            width="100%"
-            style={{
-              borderCollapse: "collapse",
-              tableLayout: "fixed",
-              border: "1px solid #e5e7eb",
-              background: "#fff",
-            }}
-          ><colgroup>
-              <col style={{ width: "180px" }} />
-              <col style={{ width: "420px" }} />
-              <col style={{ width: "120px" }} />
-              <col style={{ width: "120px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "120px" }} />
-            </colgroup>
+      {error && (
+        <div className="mb-6 bg-red-50 border-l-4 border-red-400 p-4 rounded-md flex items-center gap-3">
+          <AlertTriangle className="h-5 w-5 text-red-500" />
+          <div>
+            <p className="text-sm font-bold text-red-800">Connection Failed</p>
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
 
-
-            <thead style={{ background: "#f9fafb" }}>
-              <tr>
-                <th style={th}>Title</th>
-                <th style={th}>Description</th>
-                <th style={th}>Job Link</th>
-                <th style={th}>Status</th>
-                <th style={th}>Applied At</th>
-                <th style={th}>Actions</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {paginatedJobs.map((job) => (
-                <tr key={job.jobId}
-                  style={{
-                    lineHeight: "1.6",
-                    transition: "background 0.2s ease",
-                    borderBottom: "1px solid #e5e7eb",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                >
-                  <td style={td}>{job.title}</td>
-                  <td style={{ ...td, maxWidth: "420px" }}>
-                    <div
-                      style={{
-                        display: "-webkit-box",
-                        WebkitLineClamp: 3,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                        lineHeight: "1.6",
-                        color: "#374151",
-                      }}
-                    >
-                      {job.description}
-                      {selectedJob && (
-                        <div
-                          style={{
-                            position: "fixed",
-                            inset: 0,
-                            background: "rgba(0,0,0,0.5)",
-                            display: "flex",
-                            justifyContent: "center",
-                            alignItems: "center",
-                            zIndex: 1000,
-                          }}
-                          onClick={() => setSelectedJob(null)}
-                        >
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              background: "#fff",
-                              padding: "24px",
-                              borderRadius: "12px",
-                              maxWidth: "700px",
-                              maxHeight: "80vh",
-                              overflowY: "auto",
-                              boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
-                            }}
-                          >
-                            <h3 style={{ marginBottom: "12px" }}>{selectedJob.title}</h3>
-
-                            <p style={{ whiteSpace: "pre-wrap", lineHeight: "1.6" }}>
-                              {selectedJob.description}
-                            </p>
-
-                            <div style={{ textAlign: "right", marginTop: "20px" }}>
-                              <button
-                                onClick={() => setSelectedJob(null)}
-                                style={{
-                                  padding: "8px 14px",
-                                  borderRadius: "6px",
-                                  background: "#2563eb",
-                                  color: "#fff",
-                                  border: "none",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                Close
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                    </div>
-
-                    {job.description && job.description.length > 200 && (
-                      <button
-                        onClick={() => setSelectedJob(job)}
-                        style={{
-                          marginTop: "6px",
-                          background: "none",
-                          border: "none",
-                          color: "#2563eb",
-                          cursor: "pointer",
-                          fontSize: "13px",
-                          padding: 0,
-                        }}
-                      >
-                        View more
-                      </button>
-                    )}
-                  </td>
-
-
-                  <td style={td}>
-                    {job.jobLink && job.jobLink !== "N/A" ? (
-                      <a
-                        href={job.jobLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          color: "#2563eb",
-                          fontWeight: 500,
-                          textDecoration: "none",
-                        }}
-                      >
-                        JobLink
-                      </a>
-                    ) : (
-                      <span style={{ color: "#9ca3af" }}>N/A</span>
-                    )}
-                  </td>
-
-                  <td style={{ verticalAlign: "center" }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",   // 🔑 important
-                        minHeight: "24px",          // 🔑 stabilizes row
-                        paddingTop: "2px",          // visual alignment
-                      }}
-                    >
-                      <span
-                        style={{
-                          padding: "4px 10px",
-                          borderRadius: "999px",
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          minWidth: "90px",
-                          textAlign: "center",
-                          background:
-                            (job.applicationStatus ?? "NOT_APPLIED") === "APPLIED"
-                              ? "#dcfce7"
-                              : "#fef3c7",
-                          color:
-                            (job.applicationStatus ?? "NOT_APPLIED") === "APPLIED"
-                              ? "#166534"
-                              : "#374151",
-                        }}
-                      >
-                        {(job.applicationStatus ?? "NOT_APPLIED").replaceAll("_", " ")}
-                      </span>
-                    </div>
-                  </td>
-
-                  <td style={td}>
-                    {job.appliedAt
-                      ? new Date(job.appliedAt).toLocaleString()
-                      : "-"}
-                  </td>
-                  <td style={td}>
-                    <button
-                      style={secondaryBtn}
-                      onClick={() => handleDownload(job.jobId)}
-                    >    <i className="fa fa-download" style={{ marginRight: 6 }} />
-                      Resume
-                    </button>
-                  </td>
-
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* MOBILE BLOCK START */}
-          {!loading && jobs.length > 0 && isMobile && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              {jobs.map((job) => (
-                <div
-                  key={job.jobId}
-                  style={{
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "12px",
-                    padding: "14px",
-                    background: "#fff",
-                  }}
-                >
-                  {/* TITLE */}
-                  <div style={{ fontWeight: 600, fontSize: "15px" }}>
-                    {job.title}
-                  </div>
-
-                  {/* STATUS */}
-                  <div style={{ marginTop: "6px" }}>
-                    <span
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: "999px",
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        background:
-                          job.applicationStatus === "APPLIED"
-                            ? "#fef3c7"
-                            : "#dcfce7",
-                        color:
-                          job.applicationStatus === "APPLIED"
-                            ? "#166534"
-                            : "#374151",
-                      }}
-                    >
-                      {job.applicationStatus}
-                    </span>
-                  </div>
-
-                  {/* DESCRIPTION */}
-                  <div
-                    style={{
-                      marginTop: "8px",
-                      fontSize: "13px",
-                      color: "#374151",
-                    }}
-                  >
-                    {job.description?.slice(0, 120)}
-                    {job.description?.length > 120 && "..."}
-                  </div>
-
-                  {/* META */}
-                  <div style={{ marginTop: "8px", fontSize: "12px", color: "#6b7280" }}>
-                    Applied:{" "}
-                    {job.appliedAt
-                      ? new Date(job.appliedAt).toLocaleDateString()
-                      : "-"}
-                  </div>
-
-                  {/* ACTIONS */}
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "10px",
-                      marginTop: "12px",
-                    }}
-                  >
-                    {job.jobLink && job.jobLink !== "N/A" && (
-                      <a
-                        href={job.jobLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          fontSize: "13px",
-                          color: "#2563eb",
-                          textDecoration: "none",
-                        }}
-                      >
-                        View Job
-                      </a>
-                    )}
-
-                    <button
-                      style={{
-                        padding: "6px 10px",
-                        background: "#374151",
-                        color: "#fff",
-                        borderRadius: "6px",
-                        border: "none",
-                        fontSize: "13px",
-                      }}
-                      onClick={() => handleDownload(job.jobId)}
-                    >
-                      Resume
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-
-          {/* MOBILE BLOCK END */}
-          {/* PAGINATION START*/}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginTop: "20px",
-              gap: "12px",
-              flexWrap: "wrap",
-
-              /* MOBILE STICKY  */
-              position: isMobile ? "sticky" : "static",
-              bottom: isMobile ? 0 : "auto",
-              background: isMobile ? "#ffffff" : "transparent",
-              padding: isMobile ? "12px" : 0,
-              borderTop: isMobile ? "1px solid #e5e7eb" : "none",
-              zIndex: 10,
-            }}
-          >
-            {/* LEFT — COUNT */}
-            <div style={{ fontSize: "13px", color: "#6b7280" }}>
-              Showing {startIndex + 1}–{endIndex} of {totalJobs} jobs
-            </div>
-
-            {/* CENTER — PAGINATION */}
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <button
-                disabled={page === 1}
-                onClick={() => goToPage(page - 1)}
-              >
-                Prev
-              </button>
-
-              <span style={{ fontSize: "13px" }}>
-                Page {page} of {totalPages}
-              </span>
-
-              <button
-                disabled={page === totalPages}
-                onClick={() => goToPage(page + 1)}
-              >
-                Next
-              </button>
-            </div>
-
-            {/* RIGHT — PAGE JUMP + PAGE SIZE */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "13px" }}>Go to</span>
-
+      {/* FILTER BAR */}
+      <div className="bg-white border ring-1 ring-gray-900/5 shadow-sm rounded-xl p-4 md:p-5 mb-6">
+        <div className="flex flex-col sm:flex-row gap-4 items-end w-full">
+          {/* Search */}
+          <div className="w-full sm:w-1/3 relative">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Search Jobs</label>
+            <div className="relative inline-block w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               <input
-                type="number"
-                min="1"
-                max={totalPages}
-                value={page}
-                onChange={(e) => goToPage(Number(e.target.value))}
-                style={{ width: "60px", padding: "4px" }}
+                placeholder="Search by job title..."
+                value={searchTitle}
+                onChange={(e) => {
+                  setSearchTitle(e.target.value);
+                  setSearchParams({ page: 1, pageSize });
+                }}
+                className="block w-full rounded-md border-0 py-1.5 pl-9 pr-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 max-h-[36px]"
               />
+            </div>
+          </div>
 
+          {/* Status */}
+          <div className="w-full sm:w-auto relative">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+            <div className="relative inline-block w-full">
               <select
-                value={pageSize}
-                onChange={(e) => changePageSize(Number(e.target.value))}
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setSearchParams({ page: 1, pageSize });
+                }}
+                className="block w-full sm:w-40 rounded-md border-0 py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6 max-h-[36px] bg-white relative"
               >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
+                <option value="ALL">All Status</option>
+                <option value="APPLIED">Applied</option>
+                <option value="NOT_APPLIED">Not Applied</option>
               </select>
             </div>
           </div>
-          {/* PAGINATION END*/}
+
+          {/* Date */}
+          <div className="w-full sm:w-auto relative">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Applied Date</label>
+            <div className="relative inline-block w-full">
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => {
+                  setDateFilter(e.target.value);
+                  setSearchParams({ page: 1, pageSize });
+                }}
+                className="block w-full sm:w-auto rounded-md border-0 py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6 max-h-[36px] bg-white relative text-gray-600"
+              />
+            </div>
+          </div>
+
+          <div className="w-full sm:w-auto flex mt-2 sm:mt-0 ml-auto">
+            <button
+              onClick={handleClear}
+              className="inline-flex items-center justify-center gap-2 bg-white px-3 py-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 rounded-md transition-colors w-full sm:w-auto"
+            >
+              <X className="w-4 h-4" /> Clear Filters
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ERROR STATE */}
+      {!loading && error && jobs.length === 0 && (
+        <div className="card p-10 text-center animate-fade-in">
+          <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <p className="text-sm font-semibold text-red-600">{error}</p>
+        </div>
+      )}
+
+      {/* EMPTY STATE */}
+      {!loading && !error && jobs.length === 0 && (
+        <div className="bg-white rounded-xl shadow-sm ring-1 ring-gray-900/5">
+          <EmptyState
+            icon="inbox"
+            title="No jobs found"
+            description="No jobs match your current filters. Try adjusting or clearing them."
+            action={{ label: "Clear Filters", onClick: handleClear }}
+          />
+        </div>
+      )}
+
+      {/* TABLE */}
+      {jobs.length > 0 && (
+        <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-hidden animate-fade-in">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Link</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applied At</th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="p-0">
+                      <TableSkeleton cols={6} rows={5} />
+                    </td>
+                  </tr>
+                ) : (
+                  jobs.map((job) => (
+                    <tr key={job.jobId} className="hover:bg-gray-50 transition-colors">
+                      {/* TITLE */}
+                      <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900 max-w-[180px] truncate">
+                        {job.title}
+                      </td>
+
+                      {/* DESCRIPTION */}
+                      <td className="px-6 py-4 text-sm text-gray-600 max-w-[320px]">
+                        <div className="line-clamp-2 leading-relaxed whitespace-pre-line text-xs font-medium">
+                          {job.description}
+                        </div>
+                        {job.description?.length > 120 && (
+                          <button
+                            onClick={() => setSelectedJob(job)}
+                            className="mt-1 text-xs font-semibold text-indigo-600 hover:text-indigo-500 transition-colors"
+                          >
+                            View more
+                          </button>
+                        )}
+                      </td>
+
+                      {/* JOB LINK */}
+                      <td className="whitespace-nowrap px-6 py-4 text-sm">
+                        {job.jobLink && job.jobLink !== "N/A" ? (
+                          <a
+                            href={job.jobLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-500 font-medium transition-colors"
+                          >
+                            View <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        ) : (
+                          <span className="text-gray-400 text-xs italic">N/A</span>
+                        )}
+                      </td>
+
+                      {/* STATUS */}
+                      <td className="whitespace-nowrap px-6 py-4 text-sm">
+                        {(job.applicationStatus ?? "NOT_APPLIED") === "APPLIED" ? (
+                          <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                            Applied
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">
+                            Not Applied
+                          </span>
+                        )}
+                      </td>
+
+                      {/* APPLIED AT */}
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                        {job.appliedAt
+                          ? new Date(job.appliedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+                          : "—"}
+                      </td>
+
+                      {/* ACTIONS */}
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-right">
+                        <button
+                          onClick={() => handleDownload(job)}
+                          className="inline-flex items-center justify-center gap-2 bg-white px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 rounded-md transition-colors"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Resume
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* PAGINATION */}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalElements={totalElements}
+            pageSize={pageSize}
+            goToPage={goToPage}
+            changePageSize={changePageSize}
+          />
         </div>
       )}
     </div>
   );
 };
-
-/* ===================== */
-/* Styles */
-/* ===================== */
-
-const th = {
-  padding: "12px",
-  borderBottom: "1px solid #e5e7eb",
-  textAlign: "left",
-  fontSize: "16px",
-};
-
-const td = {
-  padding: "18px 14px",
-  fontSize: "14px",
-  lineHeight: "1.6",
-};
-
-const primaryBtn = {
-  padding: "6px 12px",
-  background: "#2563eb",
-  color: "#fff",
-  border: "none",
-  borderRadius: "6px",
-  cursor: "pointer",
-};
-
-const secondaryBtn = {
-  padding: "6px 12px",
-  background: "#374151",
-  color: "#fff",
-  border: "none",
-  borderRadius: "6px",
-  cursor: "pointer",
-};
-
-const paginationBtn = {
-  padding: "6px 12px",
-  borderRadius: "6px",
-  border: "1px solid #d1d5db",
-  background: "#fff",
-  cursor: "pointer",
-};
-
-const filterInput = {
-  padding: "8px 12px",
-  border: "1px solid #d1d5db",
-  borderRadius: "8px",
-  fontSize: "14px",
-  minWidth: "200px",
-};
-
-const filterSelect = {
-  padding: "8px 12px",
-  border: "1px solid #d1d5db",
-  borderRadius: "8px",
-  fontSize: "14px",
-  minWidth: "160px",
-  background: "#fff",
-};
-
-const filterClearBtn = {
-  padding: "8px 16px",
-  borderRadius: "8px",
-  border: "1px solid #d1d5db",
-  background: "#ffffff",
-  cursor: "pointer",
-  fontSize: "14px",
-};
-
 
 export default CandidateJobHistoryPage;

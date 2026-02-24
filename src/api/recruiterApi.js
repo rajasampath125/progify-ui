@@ -44,6 +44,18 @@ export const getJobCandidates = (jobId) => {
   return api.get(`/jobs/${jobId}/candidates`);
 };
 
+export const getAllJobsCandidates = () => {
+  return api.get(`/jobs/candidates/all`);
+};
+
+export const updateRecruiterJob = (jobId, data) => {
+  return api.put(`/jobs/${jobId}`, data);
+};
+
+export const deleteRecruiterJob = (jobId) => {
+  return api.delete(`/jobs/${jobId}`);
+};
+
 export const createRecruiterJob = (formData) => {
   return api.post("/admin/jobs", formData, {
     headers: {
@@ -51,103 +63,3 @@ export const createRecruiterJob = (formData) => {
     },
   });
 };
-
-
-// import axios from "axios";
-
-// const getAuthHeader = () => {
-//   const auth = JSON.parse(localStorage.getItem("auth"));
-//   return {
-//     Authorization: `Bearer ${auth?.token}`,
-//   };
-// };
-
-
-// /* ===================== */
-// /* RECRUITER (PROFILE)      */
-// /* ===================== */
-
-// export const getCurrentRecruiter = () => {
-//   const auth = JSON.parse(localStorage.getItem("auth"));
-//   const token = auth?.token;
-
-//   return axios.get("/api/recruiter/me", {
-//     headers: {
-//       Authorization: `Bearer ${token}`,
-//     },
-//   });
-// };
-
-// /* ================================ */
-// /* RECRUITER (CANDIDATES LIST)      */
-// /* ================================ */
-
-// export const getAllCandidatesForRecruiter = () => {
-//   const auth = JSON.parse(localStorage.getItem("auth"));
-//   const token = auth?.token;
-
-//   return axios.get("/api/admin/users/candidates", {
-//     headers: getAuthHeader(),
-//   });
-// };
-
-// export const getCandidateById = (id) => {
-//   const auth = JSON.parse(localStorage.getItem("auth"));
-//   return axios.get(`/api/recruiter/candidates/${id}`, {
-//     headers: {
-//       Authorization: `Bearer ${auth.token}`,
-//     },
-//   });
-// };
-
-
-// /* ===================== */
-// /* JOBS (RECRUITER)      */
-// /* ===================== */
-
-// export const getCandidateUsers = () => {
-//   return axios.get("/api/admin/users/candidates", {
-//     headers: getAuthHeader(),
-//   });
-// };
-
-// export const getRecruiterJobs = () => {
-//   return axios.get("/api/jobs/getAllJobsList", {
-//     headers: getAuthHeader(),
-//   });
-// };
-
-// export const deactivateRecruiterJob = (jobId) => {
-//   return axios.put(
-//     `/api/jobs/${jobId}/deactivate`,
-//     {},
-//     {
-//       headers: getAuthHeader(),
-//     }
-//   );
-// };
-
-// export const getJobCandidates = (jobId) => {
-//   return axios.get(`/api/jobs/${jobId}/candidates`, {
-//     headers: getAuthHeader(),
-//   });
-// };
-
-// export const createRecruiterJob = (formData) => {
-//   return axios.post("/api/admin/jobs", formData, {
-//     headers: {
-//       ...getAuthHeader(),
-//       "Content-Type": "multipart/form-data",
-//     },
-//   });
-// };
-
-// export const activateRecruiterJob = (jobId) => {
-//   return axios.put(
-//     `/api/jobs/${jobId}/activate`,
-//     {},
-//     {
-//       headers: getAuthHeader(),
-//     }
-//   );
-// };

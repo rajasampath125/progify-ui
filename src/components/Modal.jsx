@@ -21,8 +21,11 @@ const styles = {
   },
   modal: {
     position: "relative",
-    borderRadius: "12px",
+    borderRadius: "16px",
     overflow: "hidden",
+    width: "100%",
+    maxWidth: "900px",
+    margin: "0 16px",
   },
   close: {
     position: "absolute",

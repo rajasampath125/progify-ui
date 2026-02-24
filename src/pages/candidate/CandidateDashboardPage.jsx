@@ -1,37 +1,94 @@
 import { useEffect, useState } from "react";
 import { getCandidateSummary, getCurrentCandidate } from "../../api/candidateApi";
 import { Link } from "react-router-dom";
+import {
+  Briefcase,
+  CheckCircle2,
+  Clock,
+  ArrowRight,
+  History,
+} from "lucide-react";
 
-/**
- * CandidateDashboardPage
- *
- * Responsibilities:
- * - Show candidate activity summary
- * - Entry point for candidate actions
- *
- * Rules:
- * - Read-only
- * - No tables
- * - No forms
- */
+/* =====================
+   SKELETON LOADER
+===================== */
+function DashboardSkeleton() {
+  return (
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 animate-fade-in">
+      <div className="mb-10">
+        <div className="skeleton h-7 w-56 mb-2" />
+        <div className="skeleton h-4 w-80" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-10">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="stat-card">
+            <div className="skeleton h-4 w-28 mb-4" />
+            <div className="skeleton h-10 w-16" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* =====================
+   METRIC CARD
+===================== */
+function MetricCard({ title, value, icon: Icon, accent }) {
+  return (
+    <div className={`stat-card relative overflow-hidden animate-slide-up`}>
+      {/* colored left accent bar */}
+      <div className={`absolute left-0 top-0 h-full w-1 ${accent} rounded-l-2xl`} />
+      <div className="flex items-start justify-between pl-3">
+        <div>
+          <p className="text-sm font-medium text-gray-500">{title}</p>
+          <p className="mt-2 text-4xl font-bold text-gray-900">{value}</p>
+        </div>
+        <div className={`p-3 rounded-xl ${accent.replace(/-(\d+)$/, "-100")}`}>
+          <Icon className={`w-6 h-6 ${accent.replace("bg-", "text-")}`} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =====================
+   ACTION LINK CARD
+===================== */
+function ActionLink({ to, title, description, icon: Icon, accent }) {
+  return (
+    <Link
+      to={to}
+      className="group card p-6 flex items-start gap-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 no-underline"
+    >
+      <div className={`p-3 rounded-xl ${accent} shrink-0`}>
+        <Icon className={`w-5 h-5 ${accent.replace("bg-", "text-").replace("-100", "-700")}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <h3 className="text-base font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+          {title}
+        </h3>
+        <p className="mt-1 text-sm text-gray-500">{description}</p>
+      </div>
+      <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all mt-1 shrink-0" />
+    </Link>
+  );
+}
+
+/* =====================
+   PAGE
+===================== */
 const CandidateDashboardPage = () => {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  const auth = JSON.parse(localStorage.getItem("auth"));
-  const name = auth?.name || "there";
+  const [profile, setProfile] = useState(null);
 
   useEffect(() => {
     getCandidateSummary()
       .then((res) => setSummary(res.data))
-      .catch((err) =>
-        console.error("Failed to load candidate summary", err)
-      )
+      .catch((err) => console.error("Failed to load candidate summary", err))
       .finally(() => setLoading(false));
   }, []);
-
-  const [profile, setProfile] = useState(null);
-  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     getCurrentCandidate()
@@ -39,135 +96,67 @@ const CandidateDashboardPage = () => {
       .catch(() => { });
   }, []);
 
-  if (loading || !summary) {
-    return (
-      <div style={{ padding: "40px" }}>
-        <h1>Candidate Dashboard</h1>
-        <p>Loading summary...</p>
-      </div>
-
-    );
-  }
+  if (loading || !summary) return <DashboardSkeleton />;
 
   return (
-    <div
-      style={{
-        padding: "40px 24px",
-        maxWidth: "1000px",
-        margin: "0 auto",
-      }}
-    >
-      {/* Header */}
-      <h1 style={{ marginBottom: "32px" }}>
-        Candidate Dashboard
-      </h1>
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 animate-fade-in">
 
-      {/* Welcome Message */}
-      <h2 style={{ marginBottom: 8 }}>Hi {profile?.name || "there"}, thrilled to have you here!</h2>
-      <p style={{ color: "#56595f" }}>Here’s what’s happening with your job applications today.</p>
+      {/* PAGE HEADER */}
+      <div className="mb-10">
+        <h1 className="page-header">Candidate Dashboard</h1>
+        <p className="page-subheader">
+          Welcome back,{" "}
+          <span className="font-semibold text-indigo-600">
+            {profile?.name || "there"}
+          </span>
+          ! Here's your activity summary.
+        </p>
+      </div>
 
-      {/* Metrics */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "24px",
-          marginBottom: "48px",
-        }}
-      >
+      {/* METRICS */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-12">
         <MetricCard
           title="Assigned Jobs"
           value={summary.totalAssigned}
+          icon={Briefcase}
+          accent="bg-indigo-600"
         />
         <MetricCard
           title="Applied Jobs"
           value={summary.totalApplied}
+          icon={CheckCircle2}
+          accent="bg-emerald-600"
         />
         <MetricCard
           title="Pending Applications"
           value={summary.totalNotApplied}
+          icon={Clock}
+          accent="bg-amber-500"
         />
       </div>
 
-      {/* Actions */}
-      <h2 style={{ marginBottom: "16px" }}>
-        What would you like to do?
-      </h2>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: "24px",
-        }}
-      >
-        <ActionLink
-          to="/candidate/jobs"
-          title="My Jobs"
-          description="View assigned jobs and apply"
-        />
-        <ActionLink
-          to="/candidate/jobs/history"
-          title="Job History"
-          description="View your job activity history"
-        />
+      {/* QUICK ACTIONS */}
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <ActionLink
+            to="/candidate/jobs"
+            title="Available Jobs"
+            description="View assigned jobs and apply for open positions"
+            icon={Briefcase}
+            accent="bg-indigo-100"
+          />
+          <ActionLink
+            to="/candidate/jobs/history"
+            title="Job History"
+            description="Review your entire job application history"
+            icon={History}
+            accent="bg-emerald-100"
+          />
+        </div>
       </div>
     </div>
   );
 };
-
-/* ===================== */
-/* Local UI Components   */
-/* ===================== */
-
-function MetricCard({ title, value }) {
-  return (
-    <div
-      style={{
-        background: "#f9fafb",
-        border: "1px solid #e5e7eb",
-        borderRadius: "12px",
-        padding: "20px",
-        textAlign: "center",
-      }}
-    >
-      <div style={{ fontSize: "14px", color: "#6b7280" }}>
-        {title}
-      </div>
-      <div
-        style={{
-          fontSize: "28px",
-          fontWeight: "600",
-          marginTop: "8px",
-        }}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function ActionLink({ to, title, description }) {
-  return (
-    <Link
-      to={to}
-      style={{
-        display: "block",
-        textDecoration: "none",
-        border: "1px solid #e5e7eb",
-        borderRadius: "12px",
-        padding: "24px",
-        background: "#ffffff",
-        color: "#111827",
-      }}
-    >
-      <h3 style={{ marginBottom: "8px" }}>{title}</h3>
-      <p style={{ margin: 0, color: "#6b7280" }}>
-        {description}
-      </p>
-    </Link>
-  );
-}
-
 
 export default CandidateDashboardPage;

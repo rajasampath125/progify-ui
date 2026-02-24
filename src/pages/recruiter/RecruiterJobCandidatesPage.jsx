@@ -7,6 +7,9 @@ One row = one candidate
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getJobCandidates } from "../../api/recruiterApi";
+import TableSkeleton from "../../components/ui/TableSkeleton";
+import EmptyState from "../../components/ui/EmptyState";
+import { ArrowLeft } from "lucide-react";
 
 const RecruiterJobCandidatesPage = () => {
   const { id: jobId } = useParams();
@@ -36,137 +39,97 @@ const RecruiterJobCandidatesPage = () => {
   };
 
   return (
-    <div
-      style={{
-        padding: "40px 24px",
-        maxWidth: "1000px",
-        margin: "0 auto",
-      }}
-    >
+    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <button
         onClick={() => navigate("/recruiter/jobs")}
-        style={backBtn}
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors mb-6"
       >
-        ← Back to Jobs
+        <ArrowLeft className="w-4 h-4" /> Back to Jobs
       </button>
 
-      <h1 style={{ marginTop: "16px", marginBottom: "8px" }}>
-        Job Candidates
-      </h1>
-      <p style={{ color: "#6b7280", marginBottom: "24px" }}>
-        Candidates assigned to this job
-      </p>
+      <div className="sm:flex sm:items-center sm:justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:tracking-tight">
+            Job Candidates
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Candidates assigned to this job
+          </p>
+        </div>
+      </div>
 
-      {loading && <p>Loading candidates...</p>}
-
-      {!loading && error && (
-        <p style={{ color: "red" }}>{error}</p>
-      )}
-
-      {!loading && !error && candidates.length === 0 && (
-        <p>No candidates found for this job.</p>
-      )}
-
-      {!loading && candidates.length > 0 && (
-        <div style={tableWrapper}>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Email</th>
-                <th style={thStyle}>Status</th>
-                <th style={thStyle}>Applied At</th>
-              </tr>
-            </thead>
-            <tbody>
-              {candidates.map((c) => (
-                <tr
-                  key={c.candidateId}
-                  style={{ transition: "background 0.15s ease" }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#f9fafb")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "transparent")
-                  }
-                >
-                  <td style={tdStyle}>{c.candidateEmail}</td>
-
-                  <td style={tdStyle}>
-                    <span
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: "999px",
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        background:
-                          c.applicationStatus === "APPLIED"
-                            ? "#dcfce7"
-                            : "#fef3c7",
-                        color:
-                          c.applicationStatus === "APPLIED"
-                            ? "#166534"
-                            : "#92400e",
-                      }}
-                    >
-                      {c.applicationStatus === "NOT_APPLIED"
-                        ? "NOT APPLIED"
-                        : c.applicationStatus}
-                    </span>
-                  </td>
-
-                  <td style={tdStyle}>
-                    {c.appliedAt
-                      ? new Date(c.appliedAt).toLocaleString()
-                      : "-"}
-                  </td>
+      {loading ? (
+        <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-hidden">
+          <TableSkeleton cols={3} rows={5} />
+        </div>
+      ) : error ? (
+        <div className="rounded-md bg-red-50 p-4 mb-6">
+          <p className="text-sm font-medium text-red-800">{error}</p>
+        </div>
+      ) : candidates.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm ring-1 ring-gray-900/5">
+          <EmptyState
+            icon="users"
+            title="No candidates assigned"
+            description="No candidates have been assigned to this job yet."
+          />
+        </div>
+      ) : (
+        <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Candidate Email
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Application Status
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Applied At
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {candidates.map((c) => (
+                  <tr
+                    key={c.candidateId}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
+                    <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                      {c.candidateEmail}
+                    </td>
+
+                    <td className="whitespace-nowrap px-6 py-4 text-sm">
+                      <span
+                        className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${c.applicationStatus === "APPLIED"
+                          ? "bg-green-50 text-green-700 ring-green-600/20"
+                          : c.applicationStatus === "NOT_APPLIED"
+                            ? "bg-gray-50 text-gray-600 ring-gray-500/10"
+                            : "bg-yellow-50 text-yellow-800 ring-yellow-600/20"
+                          }`}
+                      >
+                        {c.applicationStatus === "NOT_APPLIED"
+                          ? "NO RESPONSE"
+                          : c.applicationStatus}
+                      </span>
+                    </td>
+
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                      {c.appliedAt
+                        ? new Date(c.appliedAt).toLocaleString()
+                        : "-"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
   );
-};
-
-/* ===================== */
-/* Styles */
-/* ===================== */
-
-const backBtn = {
-  background: "none",
-  border: "none",
-  color: "#2563eb",
-  fontSize: "14px",
-  cursor: "pointer",
-  padding: 0,
-};
-
-const tableWrapper = {
-  border: "1px solid #e5e7eb",
-  borderRadius: "12px",
-  overflow: "hidden",
-  background: "#ffffff",
-};
-
-const tableStyle = {
-  width: "100%",
-  borderCollapse: "collapse",
-};
-
-const thStyle = {
-  padding: "14px",
-  textAlign: "left",
-  background: "#f9fafb",
-  fontSize: "14px",
-  fontWeight: 600,
-  color: "#374151",
-};
-
-const tdStyle = {
-  padding: "12px 14px",
-  fontSize: "14px",
-  borderTop: "1px solid #e5e7eb",
 };
 
 export default RecruiterJobCandidatesPage;
