@@ -36,6 +36,15 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Check if the backend explicitly kicked us out FIRST
+    if (error.response?.status === 401 && error.response?.data?.kickedOut) {
+      window.dispatchEvent(new CustomEvent("user_kicked_out", {
+        detail: { message: error.response.data.message }
+      }));
+      // We don't immediately redirect/clear auth here, the modal handles that
+      return Promise.reject(error);
+    }
+
     // Only attempt refresh once per failed request
     if (error.response?.status === 401 && !originalRequest._retry) {
       // While a refresh is already in-flight, queue this request

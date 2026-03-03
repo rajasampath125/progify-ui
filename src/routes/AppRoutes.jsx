@@ -32,6 +32,8 @@ import MainLayout from "../components/layout/MainLayout";
 import HomePage from "../pages/HomePage";
 import ContactPage from "../pages/ContactPage";
 
+import CalendarPage from "../pages/shared/CalendarPage";
+
 export function AppRoutes() {
   return (
     <Routes>
@@ -64,6 +66,7 @@ export function AppRoutes() {
           <Route path="profile" element={<CandidateProfilePage />} />
           <Route path="jobs" element={<CandidateJobsPage />} />
           <Route path="jobs/history" element={<CandidateJobHistoryPage />} />
+          <Route path="calendar" element={<CalendarPage />} />
         </Route>
 
         {/* -------- ADMIN -------- */}
@@ -81,6 +84,7 @@ export function AppRoutes() {
           <Route path="profile" element={<AdminProfilePage />} />
           <Route path="job-assignments" element={<AdminJobAssigmentReportPage />} />
           <Route path="analytics" element={<AdminAnalyticsDashboardPage />} />
+          <Route path="calendar" element={<CalendarPage />} />
         </Route>
 
         {/* -------- RECRUITER -------- */}
@@ -104,6 +108,7 @@ export function AppRoutes() {
             path="jobs/:id/candidates"
             element={<RecruiterJobCandidatesPage />}
           />
+          <Route path="calendar" element={<CalendarPage />} />
         </Route>
 
       </Route>

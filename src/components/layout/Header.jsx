@@ -35,12 +35,14 @@ const MENU_CONFIG = {
         { label: "Dashboard", path: "/candidate/dashboard" },
         { label: "Available Jobs", path: "/candidate/jobs" },
         { label: "All Jobs", path: "/candidate/jobs/history" },
+        { label: "Calendar", path: "/candidate/calendar" },
     ],
     RECRUITER: [
         { label: "Dashboard", path: "/recruiter/dashboard" },
         { label: "Jobs", path: "/recruiter/jobs" },
         { label: "Candidates", path: "/recruiter/candidates" },
         { label: "Analytics", path: "/recruiter/analytics" },
+        { label: "Calendar", path: "/recruiter/calendar" },
     ],
     ADMIN: [
         { label: "Dashboard", path: "/admin/dashboard" },
@@ -48,6 +50,7 @@ const MENU_CONFIG = {
         { label: "Create Job", path: "/admin/jobs/create" },
         { label: "Job Assignment Report", path: "/admin/job-assignments" },
         { label: "Analytics", path: "/admin/analytics" },
+        { label: "Calendar", path: "/admin/calendar" },
     ],
 };
 

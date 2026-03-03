@@ -22,7 +22,7 @@ const RecruiterCandidatesPage = () => {
   const search = searchParams.get("q") || "";
   const categoryFilter = searchParams.get("category") || "ALL";
   const currentPage = Number(searchParams.get("page")) || 1;
-  const pageSize = Number(searchParams.get("size")) || 5;
+  const pageSize = Number(searchParams.get("size")) || 15;
 
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [candidateStatsLoading, setCandidateStatsLoading] = useState(false);
@@ -277,10 +277,10 @@ const RecruiterCandidatesPage = () => {
                         }}
                         className="block rounded-md border-0 py-1 pl-3 pr-8 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6"
                       >
-                        <option value={5}>5</option>
-                        <option value={10}>10</option>
-                        <option value={20}>20</option>
+                        <option value={15}>15</option>
+                        <option value={25}>25</option>
                         <option value={50}>50</option>
+                        <option value={100}>100</option>
                       </select>
                     </div>
                   </div>

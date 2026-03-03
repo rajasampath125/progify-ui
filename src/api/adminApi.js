@@ -55,15 +55,17 @@ export const getAdminSummary = () =>
 export const getAllUsers = () =>
   api.get("/admin/users");
 
+export const getActiveUsers = () =>
+  api.get("/admin/users/active");
+
 export const activateUser = (id) =>
   api.put(`/admin/users/${id}/activate`);
 
 export const deactivateUser = (id) =>
   api.put(`/admin/users/${id}/deactivate`);
 
-export const deleteUser = (id) =>
-  api.delete(`/admin/users/${id}`);
-
+export const deleteUser = (id) => api.delete(`/admin/users/${id}`);
+export const kickoutUser = (id) => api.delete(`/admin/users/${id}/kickout`);
 export const createUser = (data) =>
   api.post("/admin/users/createusers", data);
 
