@@ -107,3 +107,19 @@ export const updateAdminProfile = (data) =>
 
 export const getJobDownloadAudit = (jobId) =>
   api.get(`/jobs/${jobId}/downloads`);
+
+/* ===================== */
+/* EXPENSES              */
+/* ===================== */
+
+export const getAllExpenses = () =>
+  api.get("/admin/expenses");
+
+export const createExpense = (data) =>
+  api.post("/admin/expenses", data);
+
+export const updateExpense = (id, data) =>
+  api.put(`/admin/expenses/${id}`, data);
+
+export const deleteExpense = (id) =>
+  api.delete(`/admin/expenses/${id}`);

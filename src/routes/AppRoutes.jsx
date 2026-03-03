@@ -17,6 +17,7 @@ import AdminCategoriesPage from "../pages/admin/AdminCategoriesPage";
 import AdminProfilePage from "../pages/admin/AdminProfilePage";
 import AdminJobAssigmentReportPage from "../pages/admin/AdminJobAssigmentReportPage";
 import AdminAnalyticsDashboardPage from "../pages/admin/AdminAnalyticsDashboardPage";
+import AdminExpensesPage from "../pages/admin/AdminExpensesPage";
 
 import RecruiterDashboardPage from "../pages/recruiter/RecruiterDashboardPage";
 import RecruiterJobCreatePage from "../pages/recruiter/RecruiterJobCreatePage";
@@ -27,6 +28,7 @@ import RecruiterCandidatesPage from "../pages/recruiter/RecruiterCandidatesPage"
 import RecruiterCandidateViewPage from "../pages/recruiter/RecruiterCandidateViewPage";
 import RecruiterAnalyticsPage from "../pages/recruiter/RecruiterAnalyticsPage";
 import RecruiterCandidateActivityPage from "../pages/recruiter/RecruiterCandidateActivityPage";
+import { RecruiterDataProvider } from "../context/RecruiterDataContext";
 
 import MainLayout from "../components/layout/MainLayout";
 import HomePage from "../pages/HomePage";
@@ -84,30 +86,27 @@ export function AppRoutes() {
           <Route path="profile" element={<AdminProfilePage />} />
           <Route path="job-assignments" element={<AdminJobAssigmentReportPage />} />
           <Route path="analytics" element={<AdminAnalyticsDashboardPage />} />
+          <Route path="expenses" element={<AdminExpensesPage />} />
           <Route path="calendar" element={<CalendarPage />} />
         </Route>
 
         {/* -------- RECRUITER -------- */}
+        {/* RecruiterDataProvider uses a module-level singleton cache — all instances share data */}
         <Route
           path="/recruiter"
           element={
             <ProtectedRoute role="RECRUITER" />
           }
         >
-          <Route path="dashboard" element={<RecruiterDashboardPage />} />
-          <Route path="jobs" element={<RecruiterJobsPage />} />
+          <Route path="dashboard" element={<RecruiterDataProvider><RecruiterDashboardPage /></RecruiterDataProvider>} />
+          <Route path="jobs" element={<RecruiterDataProvider><RecruiterJobsPage /></RecruiterDataProvider>} />
           <Route path="jobs/create" element={<RecruiterJobCreatePage />} />
           <Route path="profile" element={<RecruiterProfilePage />} />
           <Route path="candidates" element={<RecruiterCandidatesPage />} />
           <Route path="candidates/:id" element={<RecruiterCandidateViewPage />} />
-          <Route path="analytics" element={<RecruiterAnalyticsPage />} />
-          <Route path="candidates/:email/activity" element={<RecruiterCandidateActivityPage />}
-          />
-
-          <Route
-            path="jobs/:id/candidates"
-            element={<RecruiterJobCandidatesPage />}
-          />
+          <Route path="analytics" element={<RecruiterDataProvider><RecruiterAnalyticsPage /></RecruiterDataProvider>} />
+          <Route path="candidates/:email/activity" element={<RecruiterDataProvider><RecruiterCandidateActivityPage /></RecruiterDataProvider>} />
+          <Route path="jobs/:id/candidates" element={<RecruiterJobCandidatesPage />} />
           <Route path="calendar" element={<CalendarPage />} />
         </Route>
 

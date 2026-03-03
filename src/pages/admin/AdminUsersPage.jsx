@@ -28,7 +28,9 @@ import {
     KeyRound,
     RotateCcw,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    Eye,
+    EyeOff
 } from "lucide-react";
 import TableSkeleton from "../../components/ui/TableSkeleton";
 import EmptyState from "../../components/ui/EmptyState";
@@ -38,6 +40,8 @@ const AdminUsersPage = () => {
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [showCreatePassword, setShowCreatePassword] = useState(false);
+    const [showResetPassword, setShowResetPassword] = useState(false);
 
     // =======================
     // TABLE FILTERS
@@ -296,13 +300,22 @@ const AdminUsersPage = () => {
                             {formData.role !== "CANDIDATE" && (
                                 <div>
                                     <label className="block text-sm font-medium leading-6 text-gray-900">Password</label>
-                                    <input
-                                        type="password"
-                                        className="mt-2 block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                                        placeholder="••••••••"
-                                        value={formData.password}
-                                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    />
+                                    <div className="relative mt-2">
+                                        <input
+                                            type={showCreatePassword ? "text" : "password"}
+                                            className="block w-full rounded-md border-0 py-1.5 px-3 pr-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                                            placeholder="••••••••"
+                                            value={formData.password}
+                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowCreatePassword(!showCreatePassword)}
+                                            className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
+                                        >
+                                            {showCreatePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
 
@@ -935,13 +948,22 @@ const AdminUsersPage = () => {
                                     {passwordChangeSuccess && <div className="mb-3 rounded-md bg-green-50 p-3 text-sm text-green-700">{passwordChangeSuccess}</div>}
 
                                     <label className="block text-sm font-medium text-gray-900 mb-1">New Password</label>
-                                    <input
-                                        type="password"
-                                        className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm"
-                                        value={newPassword}
-                                        onChange={(e) => setNewPassword(e.target.value)}
-                                        placeholder="••••••••"
-                                    />
+                                    <div className="relative mt-1">
+                                        <input
+                                            type={showResetPassword ? "text" : "password"}
+                                            className="block w-full rounded-md border-0 py-1.5 px-3 pr-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm"
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowResetPassword(!showResetPassword)}
+                                            className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
+                                        >
+                                            {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 gap-2">
                                     <button

@@ -49,12 +49,17 @@ export const useCalendarData = () => {
     }, []);
 
     useEffect(() => {
-        fetchSchedules();
-        fetchCustomTypes();
+        // Fetch all data in parallel — much faster than sequential
+        const fetches = [fetchSchedules(), fetchCustomTypes()];
         if (isPrivileged) {
-            getCandidatesList().then(r => setCandidates(r.data)).catch(console.error);
+            fetches.push(
+                getCandidatesList()
+                    .then(r => setCandidates(r.data))
+                    .catch(e => console.error("Failed to load candidates list", e))
+            );
         }
-    }, [auth]);
+        Promise.all(fetches);
+    }, [isPrivileged]); // only re-fetch if role changes, not every auth ref change
 
     const addCustomType = async (name, color) => {
         await createInterviewType({ name: name.trim(), color });

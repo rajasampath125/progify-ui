@@ -15,7 +15,9 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 
 import { useAuth } from "../../auth/useAuth";
 import { createSchedule, updateSchedule, deleteSchedule } from "../../api/calendarApi";
-import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2 } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2, AlertCircle, X } from "lucide-react";
+
+import Modal from "../../components/Modal";
 
 import { useCalendarData } from "./calendar/useCalendarData";
 import { localizer, TYPE_CONFIG, EMPTY_FORM, noAllDay } from "./calendar/calendarConfig";
@@ -26,6 +28,7 @@ import ManageTypesModal from "./calendar/ManageTypesModal";
 
 // ── Per-type event styling ─────────────────────────────────────────────────────
 const buildEventProps = (allTypeConfig) => (event) => {
+    const isPast = event.end < new Date();
     const t = event.resource.ownerOrAdmin ? event.resource.interviewType : "Blocked";
     const cfg = allTypeConfig[t] ?? allTypeConfig.Other;
     return {
@@ -41,23 +44,30 @@ const buildEventProps = (allTypeConfig) => (event) => {
             cursor: "pointer",
             boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
             overflow: "hidden",
+            opacity: isPast ? 0.45 : 1,
+            pointerEvents: isPast ? "none" : "auto", // prevent clicking past events
         }
     };
 };
 
 // ── Event block inner content ──────────────────────────────────────────────────
 const EventBlock = ({ event, allTypeConfig }) => {
+    const isPast = event.end < new Date();
     const t = event.resource.ownerOrAdmin ? event.resource.interviewType : "Blocked";
     const cfg = allTypeConfig[t] ?? allTypeConfig.Other;
     return (
         <div className="flex flex-col w-full h-full overflow-hidden gap-px">
-            <span className="font-semibold truncate leading-tight" style={{ color: cfg.text }}>
+            <span className={`font-semibold truncate leading-tight ${isPast ? "line-through opacity-80" : ""}`} style={{ color: cfg.text }}>
                 {event.resource.ownerOrAdmin ? (event.resource.candidateName || "Me") : "Blocked"}
             </span>
             {event.resource.ownerOrAdmin && (
                 <>
-                    <span className="truncate leading-tight opacity-75 text-[10px]">{event.resource.companyName}</span>
-                    <span className="uppercase tracking-widest opacity-50 text-[9px] font-bold">{t}</span>
+                    <span className={`truncate leading-tight opacity-75 text-[10px] ${isPast ? "line-through" : ""}`} style={{ color: cfg.text }}>
+                        {event.resource.companyName}
+                    </span>
+                    <span className={`uppercase tracking-widest opacity-50 text-[9px] font-bold ${isPast ? "line-through" : ""}`} style={{ color: cfg.text }}>
+                        {t}
+                    </span>
                 </>
             )}
         </div>
@@ -84,6 +94,7 @@ const CalendarPage = () => {
     // ── Modals ────────────────────────────────────────────────────────────────
     const [modalOpen, setModalOpen] = useState(false);
     const [manageTypesOpen, setManageTypesOpen] = useState(false);
+    const [pastDateErrorOpen, setPastDateErrorOpen] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [formData, setFormData] = useState(EMPTY_FORM);
 
@@ -140,6 +151,10 @@ const CalendarPage = () => {
     }, []);
 
     const handleSelectSlot = (slot) => {
+        if (slot.start < new Date()) {
+            setPastDateErrorOpen(true);
+            return;
+        }
         const sd = format(slot.start, "yyyy-MM-dd");
         const st = format(slot.start, "HH:mm");
         let end = slot.end;
@@ -167,30 +182,47 @@ const CalendarPage = () => {
 
     // ── Save schedule ─────────────────────────────────────────────────────────
     const handleSave = async (data) => {
-        if (!data.companyName.trim()) throw new Error("Company name is required");
-        if (data.interviewType === "Other" && !data.otherInterviewType.trim())
-            throw new Error("Please specify the 'Other' interview type");
-        if (!data.startDate || !data.startTime || !data.endDate || !data.endTime)
-            throw new Error("Date and time fields are required");
-        const startIso = `${data.startDate}T${data.startTime}:00`;
-        const endIso = `${data.endDate}T${data.endTime}:00`;
-        if (new Date(startIso) >= new Date(endIso)) throw new Error("End time must be after start time");
-        if ((new Date(endIso) - new Date(startIso)) / 3600000 > 4) throw new Error("Block cannot exceed 4 hours");
-        if (isPrivileged && !selectedEvent && !data.candidateId) throw new Error("Please select a candidate");
+        try {
+            if (!data.companyName.trim()) throw new Error("Company name is required");
+            if (data.interviewType === "Other" && !data.otherInterviewType.trim())
+                throw new Error("Please specify the 'Other' interview type");
+            if (!data.startDate || !data.startTime || !data.endDate || !data.endTime)
+                throw new Error("Date and time fields are required");
+            const startIso = `${data.startDate}T${data.startTime}:00`;
+            const endIso = `${data.endDate}T${data.endTime}:00`;
+            if (new Date(startIso) < new Date()) throw new Error("Cannot schedule an interview in the past.");
+            if (new Date(startIso) >= new Date(endIso)) throw new Error("End time must be after start time");
+            if ((new Date(endIso) - new Date(startIso)) / 3600000 > 4) throw new Error("Block cannot exceed 4 hours");
+            if (isPrivileged && !selectedEvent && !data.candidateId) throw new Error("Please select a candidate");
 
-        const payload = {
-            candidateId: isPrivileged ? data.candidateId : undefined,
-            companyName: data.companyName,
-            interviewType: data.interviewType,
-            otherInterviewType: data.interviewType === "Other" ? data.otherInterviewType : null,
-            startTime: startIso,
-            endTime: endIso,
-            comments: data.comments,
-        };
-        if (selectedEvent) await updateSchedule(selectedEvent.id, payload);
-        else await createSchedule(payload);
-        setModalOpen(false);
-        fetchSchedules();
+            const payload = selectedEvent
+                ? {
+                    // UPDATE: never send candidateId — backend rejects changing it
+                    companyName: data.companyName,
+                    interviewType: data.interviewType,
+                    otherInterviewType: data.interviewType === "Other" ? data.otherInterviewType : null,
+                    startTime: startIso,
+                    endTime: endIso,
+                    comments: data.comments || null,
+                }
+                : {
+                    // CREATE: include candidateId for privileged users
+                    ...(isPrivileged && data.candidateId ? { candidateId: data.candidateId } : {}),
+                    companyName: data.companyName,
+                    interviewType: data.interviewType,
+                    otherInterviewType: data.interviewType === "Other" ? data.otherInterviewType : null,
+                    startTime: startIso,
+                    endTime: endIso,
+                    comments: data.comments || null,
+                };
+            if (selectedEvent) await updateSchedule(selectedEvent.id, payload);
+            else await createSchedule(payload);
+            setModalOpen(false);
+            fetchSchedules();
+        } catch (err) {
+            const msg = err.response?.data?.message || err.message || "Failed to schedule interview.";
+            throw new Error(msg);
+        }
     };
 
     // ── Delete schedule ───────────────────────────────────────────────────────
@@ -370,6 +402,35 @@ const CalendarPage = () => {
                     onDelete={removeCustomType}
                     onClose={() => setManageTypesOpen(false)}
                 />
+            )}
+
+            {/* Past Date Error Modal (Tailwind custom overlay instead of generic Modal) */}
+            {pastDateErrorOpen && (
+                <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="p-6 rounded-2xl bg-white max-w-sm w-full mx-auto shadow-2xl relative shadow-indigo-900/10 animate-in zoom-in-95 duration-200">
+                        <button
+                            onClick={() => setPastDateErrorOpen(false)}
+                            className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                        <div className="flex flex-col items-center text-center">
+                            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                                <AlertCircle className="w-6 h-6 text-red-600" />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-900 mb-2">Invalid Selection</h3>
+                            <p className="text-sm text-slate-500 mb-6 px-2">
+                                You cannot schedule an interview for a time slot that has already passed.
+                            </p>
+                            <button
+                                onClick={() => setPastDateErrorOpen(false)}
+                                className="w-full bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors"
+                            >
+                                Got it
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </>
     );

@@ -10,6 +10,7 @@ function InternalLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -200,25 +201,43 @@ function InternalLoginPage() {
                 <label className="block text-sm font-medium text-slate-700">
                   New Password
                 </label>
-                <input
-                  type="password"
-                  placeholder="At least 8 characters"
-                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
+                <div className="relative mt-2">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    placeholder="At least 8 characters"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-11 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute inset-y-0 right-3 flex items-center text-slate-500 hover:text-slate-700"
+                  >
+                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700">
                   Confirm New Password
                 </label>
-                <input
-                  type="password"
-                  placeholder="Confirm password"
-                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
+                <div className="relative mt-2">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    placeholder="Confirm password"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-11 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute inset-y-0 right-3 flex items-center text-slate-500 hover:text-slate-700"
+                  >
+                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <button

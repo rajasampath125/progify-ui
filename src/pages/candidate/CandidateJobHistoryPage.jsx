@@ -21,7 +21,7 @@ import EmptyState from "../../components/ui/EmptyState";
 /* =====================
    DESCRIPTION MODAL
 ===================== */
-function DescriptionModal({ job, onClose }) {
+function DescriptionModal({ job, onClose, onDownload }) {
   if (!job) return null;
   return (
     <div
@@ -29,22 +29,54 @@ function DescriptionModal({ job, onClose }) {
       onClick={onClose}
     >
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col animate-slide-up"
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between p-6 border-b border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900 pr-4">{job.title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+        {/* Header */}
+        <div className="flex items-start justify-between p-6 border-b border-slate-100">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 pr-4">{job.title}</h3>
+            {job.appliedAt ? (
+              <p className="text-xs text-slate-400 mt-0.5">Applied {new Date(job.appliedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}</p>
+            ) : (
+              <p className="text-xs text-amber-500 mt-0.5">Not yet applied</p>
+            )}
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-lg hover:bg-slate-100">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6 overflow-y-auto">
-          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-            {job.description}
+
+        {/* Description body */}
+        <div className="p-6 overflow-y-auto flex-1">
+          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+            {job.description || <span className="italic text-slate-400">No description provided.</span>}
           </p>
         </div>
-        <div className="flex justify-end p-4 border-t border-gray-100">
-          <button onClick={onClose} className="btn-secondary">
+
+        {/* Footer actions */}
+        <div className="flex items-center justify-between gap-3 p-4 border-t border-slate-100 bg-slate-50/80 rounded-b-2xl">
+          <div className="flex items-center gap-2">
+            {job.jobLink && job.jobLink !== "N/A" && (
+              <a
+                href={job.jobLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-3.5 py-2 transition-all shadow-sm"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Job Link
+              </a>
+            )}
+            <button
+              onClick={() => { onDownload(job); onClose(); }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 text-sm font-semibold px-3.5 py-2 transition-all shadow-sm"
+            >
+              <Download className="w-4 h-4 text-slate-500" />
+              Resume
+            </button>
+          </div>
+          <button onClick={onClose} className="text-sm font-medium text-slate-500 hover:text-slate-700 px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors">
             Close
           </button>
         </div>
@@ -56,77 +88,33 @@ function DescriptionModal({ job, onClose }) {
 /* =====================
    PAGINATION
 ===================== */
-function Pagination({ page, totalPages, totalElements, pageSize, goToPage, changePageSize }) {
+function Pagination({ page, totalPages, totalElements, pageSize, goToPage }) {
+  const startItem = totalElements === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endItem = Math.min(page * pageSize, totalElements);
   return (
-    <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-      <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-        <p className="text-sm text-gray-700">
-          Showing{" "}
-          <span className="font-semibold">
-            {totalElements === 0 ? 0 : (page - 1) * pageSize + 1}
-          </span>{" "}
-          to{" "}
-          <span className="font-semibold">
-            {Math.min(page * pageSize, totalElements)}
-          </span>{" "}
-          of <span className="font-semibold">{totalElements}</span> results
-        </p>
-
-        <div className="flex items-center gap-4">
-          {/* page size */}
-          <select
-            value={pageSize}
-            onChange={(e) => changePageSize(Number(e.target.value))}
-            className="filter-input"
-          >
-            <option value={5}>5 / page</option>
-            <option value={10}>10 / page</option>
-            <option value={20}>20 / page</option>
-          </select>
-
-          {/* prev/next */}
-          <nav className="isolate inline-flex -space-x-px rounded-lg shadow-sm">
-            <button
-              onClick={() => goToPage(page - 1)}
-              disabled={page === 1}
-              className="relative inline-flex items-center rounded-l-lg px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 bg-white select-none">
-              {page} / {totalPages || 1}
-            </span>
-            <button
-              onClick={() => goToPage(page + 1)}
-              disabled={page === totalPages || totalPages === 0}
-              className="relative inline-flex items-center rounded-r-lg px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-          </nav>
-        </div>
-      </div>
-
-      {/* Mobile */}
-      <div className="flex sm:hidden w-full justify-between items-center mt-3">
+    <div className="flex items-center justify-between border-t border-slate-100 bg-white px-5 py-3">
+      <p className="text-sm text-slate-600">
+        Showing <span className="font-semibold text-slate-900">{startItem}</span>–<span className="font-semibold text-slate-900">{endItem}</span> of <span className="font-semibold text-slate-900">{totalElements}</span> results
+      </p>
+      <nav className="isolate inline-flex -space-x-px rounded-xl shadow-sm">
         <button
           onClick={() => goToPage(page - 1)}
           disabled={page === 1}
-          className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="relative inline-flex items-center gap-1 rounded-l-xl px-3 py-2 text-sm font-medium text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+          <ChevronLeft className="h-4 w-4" /> Prev
         </button>
-        <span className="text-sm text-gray-600 font-medium bg-gray-50 px-3 py-1.5 rounded-md">
+        <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200 bg-white select-none">
           {page} / {totalPages || 1}
         </span>
         <button
           onClick={() => goToPage(page + 1)}
           disabled={page === totalPages || totalPages === 0}
-          className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="relative inline-flex items-center gap-1 rounded-r-xl px-3 py-2 text-sm font-medium text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          Next <ChevronRight className="w-4 h-4 ml-1" />
+          Next <ChevronRight className="h-4 w-4" />
         </button>
-      </div>
+      </nav>
     </div>
   );
 }
@@ -144,7 +132,7 @@ const CandidateJobHistoryPage = () => {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const page = Number(searchParams.get("page") || 1);
-  const pageSize = Number(searchParams.get("pageSize") || 5);
+  const pageSize = Number(searchParams.get("pageSize") || 10);
 
   const [searchTitle, setSearchTitle] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -237,7 +225,7 @@ const CandidateJobHistoryPage = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 animate-fade-in">
 
       {/* DESCRIPTION MODAL */}
-      <DescriptionModal job={selectedJob} onClose={() => setSelectedJob(null)} />
+      <DescriptionModal job={selectedJob} onClose={() => setSelectedJob(null)} onDownload={handleDownload} />
 
       {/* PAGE HEADER */}
       <div className="sm:flex sm:items-center sm:justify-between mb-8">
@@ -263,68 +251,57 @@ const CandidateJobHistoryPage = () => {
       )}
 
       {/* FILTER BAR */}
-      <div className="bg-white border ring-1 ring-gray-900/5 shadow-sm rounded-xl p-4 md:p-5 mb-6">
-        <div className="flex flex-col sm:flex-row gap-4 items-end w-full">
+      <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-900/5 p-4 mb-6">
+        <div className="flex flex-col sm:flex-row gap-3 items-end w-full">
           {/* Search */}
-          <div className="w-full sm:w-1/3 relative">
-            <label className="block text-xs font-medium text-gray-500 mb-1">Search Jobs</label>
-            <div className="relative inline-block w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-              <input
-                placeholder="Search by job title..."
-                value={searchTitle}
-                onChange={(e) => {
-                  setSearchTitle(e.target.value);
-                  setSearchParams({ page: 1, pageSize });
-                }}
-                className="block w-full rounded-md border-0 py-1.5 pl-9 pr-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 max-h-[36px]"
-              />
-            </div>
+          <div className="flex-1 relative min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <input
+              placeholder="Search by job title..."
+              value={searchTitle}
+              onChange={(e) => {
+                setSearchTitle(e.target.value);
+                setSearchParams({ page: 1, pageSize });
+              }}
+              className="block w-full rounded-xl border-0 py-2 pl-9 pr-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
           </div>
 
           {/* Status */}
-          <div className="w-full sm:w-auto relative">
-            <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
-            <div className="relative inline-block w-full">
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setSearchParams({ page: 1, pageSize });
-                }}
-                className="block w-full sm:w-40 rounded-md border-0 py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6 max-h-[36px] bg-white relative"
-              >
-                <option value="ALL">All Status</option>
-                <option value="APPLIED">Applied</option>
-                <option value="NOT_APPLIED">Not Applied</option>
-              </select>
-            </div>
+          <div className="w-full sm:w-44 relative">
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setSearchParams({ page: 1, pageSize });
+              }}
+              className="block w-full rounded-xl border-0 py-2 pl-3 pr-8 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
+            >
+              <option value="ALL">All Status</option>
+              <option value="APPLIED">Applied</option>
+              <option value="NOT_APPLIED">Not Applied</option>
+            </select>
           </div>
 
           {/* Date */}
           <div className="w-full sm:w-auto relative">
-            <label className="block text-xs font-medium text-gray-500 mb-1">Applied Date</label>
-            <div className="relative inline-block w-full">
-              <input
-                type="date"
-                value={dateFilter}
-                onChange={(e) => {
-                  setDateFilter(e.target.value);
-                  setSearchParams({ page: 1, pageSize });
-                }}
-                className="block w-full sm:w-auto rounded-md border-0 py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6 max-h-[36px] bg-white relative text-gray-600"
-              />
-            </div>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => {
+                setDateFilter(e.target.value);
+                setSearchParams({ page: 1, pageSize });
+              }}
+              className="block w-full rounded-xl border-0 py-2 px-3 text-slate-700 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
+            />
           </div>
 
-          <div className="w-full sm:w-auto flex mt-2 sm:mt-0 ml-auto">
-            <button
-              onClick={handleClear}
-              className="inline-flex items-center justify-center gap-2 bg-white px-3 py-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 rounded-md transition-colors w-full sm:w-auto"
-            >
-              <X className="w-4 h-4" /> Clear Filters
-            </button>
-          </div>
+          <button
+            onClick={handleClear}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 text-sm font-semibold px-3.5 py-2 transition-colors w-full sm:w-auto justify-center"
+          >
+            <X className="w-4 h-4" /> Clear
+          </button>
         </div>
       </div>
 
@@ -350,17 +327,17 @@ const CandidateJobHistoryPage = () => {
 
       {/* TABLE */}
       {jobs.length > 0 && (
-        <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-hidden animate-fade-in">
+        <div className="bg-white shadow-sm ring-1 ring-slate-900/5 sm:rounded-2xl overflow-hidden animate-fade-in">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-slate-50">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Link</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applied At</th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th scope="col" className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Title</th>
+                  <th scope="col" className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Description</th>
+                  <th scope="col" className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Job Link</th>
+                  <th scope="col" className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Applied At</th>
+                  <th scope="col" className="px-5 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -372,7 +349,7 @@ const CandidateJobHistoryPage = () => {
                   </tr>
                 ) : (
                   jobs.map((job) => (
-                    <tr key={job.jobId} className="hover:bg-gray-50 transition-colors">
+                    <tr key={job.jobId} className="hover:bg-slate-50/70 transition-colors">
                       {/* TITLE */}
                       <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900 max-w-[180px] truncate">
                         {job.title}
@@ -453,7 +430,6 @@ const CandidateJobHistoryPage = () => {
             totalElements={totalElements}
             pageSize={pageSize}
             goToPage={goToPage}
-            changePageSize={changePageSize}
           />
         </div>
       )}

@@ -2,156 +2,153 @@ import { useEffect, useState } from "react";
 import { getCandidateSummary, getCurrentCandidate } from "../../api/candidateApi";
 import { Link } from "react-router-dom";
 import {
-  Briefcase,
-  CheckCircle2,
-  Clock,
-  ArrowRight,
-  History,
+  Briefcase, CheckCircle2, Clock, ArrowRight, History,
+  Sparkles, TrendingUp,
 } from "lucide-react";
 
-/* =====================
-   SKELETON LOADER
-===================== */
-function DashboardSkeleton() {
+// ── Metric card ───────────────────────────────────────────────────────────────
+function MetricCard({ title, value, icon: Icon, grad, desc }) {
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 animate-fade-in">
-      <div className="mb-10">
-        <div className="skeleton h-7 w-56 mb-2" />
-        <div className="skeleton h-4 w-80" />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-10">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="stat-card">
-            <div className="skeleton h-4 w-28 mb-4" />
-            <div className="skeleton h-10 w-16" />
-          </div>
-        ))}
+    <div className={`relative overflow-hidden rounded-2xl p-6 text-white shadow-lg bg-gradient-to-br ${grad}`}>
+      <div className="absolute -top-3 -right-3 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
+      <div className="absolute -bottom-5 -right-5 w-24 h-24 rounded-full bg-white/5 pointer-events-none" />
+      <div className="relative z-10">
+        <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center mb-4">
+          <Icon className="w-5 h-5 text-white" />
+        </div>
+        <p className="text-4xl font-extrabold tracking-tight mb-1">{value ?? "—"}</p>
+        <p className="text-sm font-bold text-white/80">{title}</p>
+        {desc && <p className="text-xs text-white/60 mt-1">{desc}</p>}
       </div>
     </div>
   );
 }
 
-/* =====================
-   METRIC CARD
-===================== */
-function MetricCard({ title, value, icon: Icon, accent }) {
-  return (
-    <div className={`stat-card relative overflow-hidden animate-slide-up`}>
-      {/* colored left accent bar */}
-      <div className={`absolute left-0 top-0 h-full w-1 ${accent} rounded-l-2xl`} />
-      <div className="flex items-start justify-between pl-3">
-        <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
-          <p className="mt-2 text-4xl font-bold text-gray-900">{value}</p>
-        </div>
-        <div className={`p-3 rounded-xl ${accent.replace(/-(\d+)$/, "-100")}`}>
-          <Icon className={`w-6 h-6 ${accent.replace("bg-", "text-")}`} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* =====================
-   ACTION LINK CARD
-===================== */
-function ActionLink({ to, title, description, icon: Icon, accent }) {
+// ── Action card ───────────────────────────────────────────────────────────────
+function ActionLink({ to, title, description, icon: Icon, grad }) {
   return (
     <Link
       to={to}
-      className="group card p-6 flex items-start gap-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 no-underline"
+      className="group bg-white rounded-2xl border border-slate-200 p-5 flex items-center gap-4 hover:border-indigo-300 hover:shadow-lg hover:shadow-indigo-50 hover:-translate-y-0.5 transition-all duration-200"
     >
-      <div className={`p-3 rounded-xl ${accent} shrink-0`}>
-        <Icon className={`w-5 h-5 ${accent.replace("bg-", "text-").replace("-100", "-700")}`} />
+      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center shadow-md shrink-0`}>
+        <Icon className="w-5 h-5 text-white" />
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="text-base font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
-          {title}
-        </h3>
-        <p className="mt-1 text-sm text-gray-500">{description}</p>
+        <p className="font-semibold text-slate-900 group-hover:text-indigo-700 transition-colors text-sm">{title}</p>
+        <p className="text-xs text-slate-500 mt-0.5 leading-snug">{description}</p>
       </div>
-      <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all mt-1 shrink-0" />
+      <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all shrink-0" />
     </Link>
   );
 }
 
-/* =====================
-   PAGE
-===================== */
+// ── Progress bar ──────────────────────────────────────────────────────────────
+function ProgressBar({ applied, total }) {
+  const pct = total === 0 ? 0 : Math.round((applied / total) * 100);
+  const color = pct >= 70 ? "from-emerald-400 to-teal-500" : pct >= 40 ? "from-amber-400 to-orange-500" : "from-indigo-400 to-violet-500";
+  return (
+    <div>
+      <div className="flex justify-between text-sm mb-2">
+        <span className="font-semibold text-slate-700">Application Rate</span>
+        <span className={`font-bold ${pct >= 70 ? "text-emerald-600" : pct >= 40 ? "text-amber-600" : "text-indigo-600"}`}>{pct}%</span>
+      </div>
+      <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full bg-gradient-to-r ${color} transition-all duration-700`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-xs text-slate-400 mt-1.5">{applied} of {total} jobs applied</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 const CandidateDashboardPage = () => {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
-    getCandidateSummary()
-      .then((res) => setSummary(res.data))
-      .catch((err) => console.error("Failed to load candidate summary", err))
-      .finally(() => setLoading(false));
+    getCandidateSummary().then(res => setSummary(res.data)).finally(() => setLoading(false));
+    getCurrentCandidate().then(res => setProfile(res.data)).catch(() => { });
   }, []);
 
-  useEffect(() => {
-    getCurrentCandidate()
-      .then((res) => setProfile(res.data))
-      .catch(() => { });
-  }, []);
+  if (loading || !summary) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="mb-10">
+          <div className="skeleton h-7 w-56 mb-2" />
+          <div className="skeleton h-4 w-80" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
+          {[0, 1, 2].map(i => <div key={i} className="h-36 rounded-2xl skeleton" />)}
+        </div>
+      </div>
+    );
+  }
 
-  if (loading || !summary) return <DashboardSkeleton />;
+  const firstName = profile?.name?.split(" ")[0] || "there";
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 animate-fade-in">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 animate-fade-in space-y-10">
 
-      {/* PAGE HEADER */}
-      <div className="mb-10">
-        <h1 className="page-header">Candidate Dashboard</h1>
-        <p className="page-subheader">
-          Welcome back,{" "}
-          <span className="font-semibold text-indigo-600">
-            {profile?.name || "there"}
-          </span>
-          ! Here's your activity summary.
-        </p>
+      {/* ── Welcome banner ───────────────────────────────────────── */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 to-violet-700 rounded-2xl p-7 text-white shadow-xl">
+        <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/10" />
+        <div className="absolute -bottom-10 right-20 w-32 h-32 rounded-full bg-white/5" />
+        <div className="relative z-10 flex items-start gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+            <Sparkles className="w-6 h-6 text-amber-300" />
+          </div>
+          <div>
+            <h1 className="text-xl font-extrabold tracking-tight mb-1">
+              Good to see you, {firstName}! 👋
+            </h1>
+            <p className="text-indigo-200 text-sm leading-relaxed max-w-xl">
+              You have <strong className="text-white">{summary.totalNotApplied}</strong> pending job
+              {summary.totalNotApplied !== 1 ? "s" : ""} to apply to. Keep going — you're doing great!
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* METRICS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-12">
-        <MetricCard
-          title="Assigned Jobs"
-          value={summary.totalAssigned}
-          icon={Briefcase}
-          accent="bg-indigo-600"
-        />
-        <MetricCard
-          title="Applied Jobs"
-          value={summary.totalApplied}
-          icon={CheckCircle2}
-          accent="bg-emerald-600"
-        />
-        <MetricCard
-          title="Pending Applications"
-          value={summary.totalNotApplied}
-          icon={Clock}
-          accent="bg-amber-500"
-        />
+      {/* ── Metrics ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <MetricCard title="Assigned Jobs" value={summary.totalAssigned} icon={Briefcase} grad="from-indigo-600 to-violet-700" />
+        <MetricCard title="Applied Jobs" value={summary.totalApplied} icon={CheckCircle2} grad="from-emerald-500 to-teal-600" desc="Great work!" />
+        <MetricCard title="Pending Applications" value={summary.totalNotApplied} icon={Clock} grad="from-amber-500 to-orange-500" desc="Don't miss these" />
       </div>
 
-      {/* QUICK ACTIONS */}
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+      {/* ── Progress bar ─────────────────────────────────────────── */}
+      {summary.totalAssigned > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-5">
+            <TrendingUp className="w-4 h-4 text-indigo-500" />
+            <h2 className="text-sm font-bold text-slate-700">Your Progress</h2>
+          </div>
+          <ProgressBar applied={summary.totalApplied} total={summary.totalAssigned} />
+        </div>
+      )}
+
+      {/* ── Quick actions ─────────────────────────────────────────── */}
+      <div>
+        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <ActionLink
             to="/candidate/jobs"
             title="Available Jobs"
             description="View assigned jobs and apply for open positions"
             icon={Briefcase}
-            accent="bg-indigo-100"
+            grad="from-indigo-600 to-violet-600"
           />
           <ActionLink
             to="/candidate/jobs/history"
             title="Job History"
             description="Review your entire job application history"
             icon={History}
-            accent="bg-emerald-100"
+            grad="from-emerald-500 to-teal-600"
           />
         </div>
       </div>
