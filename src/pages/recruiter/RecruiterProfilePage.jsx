@@ -1,83 +1,86 @@
 import { useEffect, useState } from "react";
 import { getCurrentRecruiter } from "../../api/recruiterApi";
+import { ShieldCheck, AlertCircle } from "lucide-react";
 
 const RecruiterProfilePage = () => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  useEffect(() => { loadProfile(); }, []);
 
   const loadProfile = async () => {
     try {
       setLoading(true);
       const res = await getCurrentRecruiter();
       setProfile(res.data);
-    } catch (err) {
-      setError("Failed to load recruiter profile");
-    } finally {
-      setLoading(false);
-    }
+    } catch { setError("Failed to load recruiter profile"); }
+    finally { setLoading(false); }
   };
 
-  if (loading) return <p>Loading profile...</p>;
-  if (error) return <p style={{ color: "red" }}>{error}</p>;
+  const initials = profile?.name
+    ? profile.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+    : "R";
 
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        padding: "40px 16px",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "520px",
-          background: "#ffffff",
-          borderRadius: "12px",
-          padding: "24px",
-          boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
-        }}
-      >
-        <h2 style={{ marginBottom: "20px" }}>Recruiter Account</h2>
+    <div className="max-w-lg mx-auto py-10 px-4 sm:px-6">
+      <h1 className="text-xl font-bold text-gray-900 mb-6">My Profile</h1>
 
-        {/* NAME */}
-        <div style={{ marginBottom: "16px" }}>
-          <label>Name</label>
-          <input
-            value={profile?.name || ""}
-            disabled
-            style={{ width: "100%", padding: "8px" }}
-          />
+      <div className="bg-white shadow-sm ring-1 ring-gray-900/5 rounded-xl p-6">
+        {/* Avatar row */}
+        <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-100">
+          <div className="w-14 h-14 rounded-full bg-violet-600 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
+            {loading ? "…" : initials}
+          </div>
+          <div>
+            <p className="text-base font-semibold text-gray-900">{loading ? "Loading…" : profile?.name}</p>
+            {profile?.role && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700 ring-1 ring-violet-600/20 mt-1">
+                <ShieldCheck className="w-3 h-3" />{profile.role}
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* EMAIL */}
-        <div style={{ marginBottom: "16px" }}>
-          <label>Email</label>
-          <input
-            value={profile?.email || ""}
-            disabled
-            style={{ width: "100%", padding: "8px" }}
-          />
-        </div>
+        {/* Error */}
+        {error && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700">
+            <AlertCircle className="w-4 h-4" />{error}
+          </div>
+        )}
 
-        {/* ROLE */}
-        <div style={{ marginBottom: "16px" }}>
-          <label>Role</label>
-          <input
-            value={profile?.role || ""}
-            disabled
-            style={{ width: "100%", padding: "8px" }}
-          />
-        </div>
+        {/* Skeleton */}
+        {loading && (
+          <div className="space-y-3">
+            <div className="skeleton h-4 w-32 rounded" />
+            <div className="skeleton h-9 w-full rounded-lg" />
+            <div className="skeleton h-4 w-32 rounded mt-4" />
+            <div className="skeleton h-9 w-full rounded-lg" />
+          </div>
+        )}
 
-        <p style={{ fontSize: "13px", color: "#6b7280" }}>
-          Contact an administrator to update your account details.
-        </p>
+        {/* Fields (read-only) */}
+        {!loading && profile && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Full Name</label>
+              <input type="text" value={profile.name || ""} disabled
+                className="block w-full rounded-lg border-0 py-2 px-3 text-gray-500 bg-gray-50 shadow-sm ring-1 ring-inset ring-gray-200 sm:text-sm cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                Email <span className="normal-case font-normal text-gray-400">(read-only)</span>
+              </label>
+              <input type="email" value={profile.email || ""} disabled
+                className="block w-full rounded-lg border-0 py-2 px-3 text-gray-500 bg-gray-50 shadow-sm ring-1 ring-inset ring-gray-200 sm:text-sm cursor-not-allowed"
+              />
+            </div>
+            <p className="text-xs text-gray-400 pt-1">
+              To update your details, contact your administrator.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

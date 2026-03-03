@@ -1,55 +1,55 @@
 import { useSearchParams } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { getAdminJobAssignmentAnalytics } from "../../api/adminApi";
-import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { Search, X, ChevronLeft, ChevronRight, ArrowUpDown, AlertTriangle } from "lucide-react";
+import TableSkeleton from "../../components/ui/TableSkeleton";
+import EmptyState from "../../components/ui/EmptyState";
 
 const AdminJobAssigmentReportPage = () => {
     const [searchParams, setSearchParams] = useSearchParams();
-    const initialPage = Number(searchParams.get("page")) || 1;
-    const [page, setPage] = useState(initialPage);
+    const page = Number(searchParams.get("page")) || 1;
     const pageSize = 10;
-    const [rows, setRows] = useState([]);
-    const [loading, setLoading] = useState(false);
-
-    const [sortOrder, setSortOrder] = useState(
-        searchParams.get("sort") || "DESC"
-    );
-    const [filters, setFilters] = useState({
-        from: searchParams.get("from") || "",
-        to: searchParams.get("to") || "",
-        recruiter: searchParams.get("recruiter") || "",
-        candidate: searchParams.get("candidate") || ""
-    });
-
-    // applied filters (used only for filtering UI, NOT API)
-    const [appliedFilters, setAppliedFilters] = useState(null);
+    const sortOrder = searchParams.get("sort") || "DESC";
+    const recruiterFilter = searchParams.get("recruiter") || "";
+    const candidateFilter = searchParams.get("candidate") || "";
     const fromParam = searchParams.get("from") || "";
     const toParam = searchParams.get("to") || "";
+
+    const updateFilters = (updates) => {
+        const newParams = new URLSearchParams(searchParams);
+        Object.entries(updates).forEach(([key, value]) => {
+            if (value === null || value === undefined || value === "") {
+                newParams.delete(key);
+            } else {
+                newParams.set(key, value);
+            }
+        });
+        if (!updates.page) newParams.delete("page");
+        setSearchParams(newParams);
+    };
+
+    const [rows, setRows] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+
     useEffect(() => {
         setLoading(true);
+        setError("");
 
         getAdminJobAssignmentAnalytics(fromParam || undefined, toParam || undefined)
             .then((res) => {
                 setRows(res.data || []);
             })
+            .catch((err) => {
+                console.error("Analytics Error:", err);
+                if (!err.response) {
+                    setError("Network Error: Backend server is unreachable.");
+                } else {
+                    setError("Failed to load analytics data.");
+                }
+            })
             .finally(() => setLoading(false));
     }, [fromParam, toParam]);
-
-    // /* ======================
-    //    FETCH ALL DATA ON LOAD
-    // ====================== */
-    // useEffect(() => {
-    //     if (fetched.current) return;
-    //     fetched.current = true;
-
-    //     setLoading(true);
-
-    //     getAdminJobAssignmentAnalytics()
-    //         .then((res) => {
-    //             setRows(res.data || []);
-    //         })
-    //         .finally(() => setLoading(false));
-    // }, []);
 
     /* ======================
        FILTERED ROWS
@@ -62,18 +62,18 @@ const AdminJobAssigmentReportPage = () => {
             if (toParam && rowDate > new Date(toParam)) return false;
 
             if (
-                filters.recruiter &&
-                !r.recruiterName
+                recruiterFilter &&
+                !(r.recruiterName || "")
                     .toLowerCase()
-                    .includes(filters.recruiter.toLowerCase())
+                    .includes(recruiterFilter.toLowerCase())
             )
                 return false;
 
             if (
-                filters.candidate &&
-                !r.candidateName
+                candidateFilter &&
+                !(r.candidateName || "")
                     .toLowerCase()
-                    .includes(filters.candidate.toLowerCase())
+                    .includes(candidateFilter.toLowerCase())
             )
                 return false;
 
@@ -111,97 +111,88 @@ const AdminJobAssigmentReportPage = () => {
             </p>
             {/* FILTERS */}
             <div className="bg-white border rounded-xl p-4 mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
 
-                    <div>
+                    <div className="col-span-1">
                         <label className="text-xs text-gray-500">From</label>
                         <input
                             type="date"
-                            max={today}
+                            max={new Date().toISOString().split("T")[0]}
                             className="w-full border rounded-lg px-3 py-2 text-sm"
-                            value={filters.from}
-                            onChange={(e) =>
-                                setFilters({ ...filters, from: e.target.value })
-                            }
+                            value={fromParam}
+                            onChange={(e) => updateFilters({ from: e.target.value })}
                         />
                     </div>
 
-                    <div>
+                    <div className="col-span-1">
                         <label className="text-xs text-gray-500">To</label>
                         <input
                             type="date"
-                            min={filters.from || undefined}
-                            max={today}
+                            min={fromParam || undefined}
+                            max={new Date().toISOString().split("T")[0]}
                             className="w-full border rounded-lg px-3 py-2 text-sm"
-                            value={filters.to}
-                            onChange={(e) =>
-                                setFilters({ ...filters, to: e.target.value })
-                            }
+                            value={toParam}
+                            onChange={(e) => updateFilters({ to: e.target.value })}
                         />
                     </div>
 
-                    <div>
+                    <div className="col-span-1">
                         <label className="text-xs text-gray-500">Recruiter</label>
                         <input
-                            placeholder="REC / SUPER_ADMIN"
+                            placeholder="Name..."
                             className="w-full border rounded-lg px-3 py-2 text-sm"
-                            value={filters.recruiter}
-                            onChange={(e) =>
-                                setFilters({ ...filters, recruiter: e.target.value })
-                            }
+                            value={recruiterFilter}
+                            onChange={(e) => updateFilters({ recruiter: e.target.value })}
                         />
                     </div>
 
-                    <div>
+                    <div className="col-span-1">
                         <label className="text-xs text-gray-500">Candidate</label>
                         <input
-                            placeholder="email"
+                            placeholder="Email..."
                             className="w-full border rounded-lg px-3 py-2 text-sm"
-                            value={filters.candidate}
-                            onChange={(e) =>
-                                setFilters({ ...filters, candidate: e.target.value })
-                            }
+                            value={candidateFilter}
+                            onChange={(e) => updateFilters({ candidate: e.target.value })}
                         />
                     </div>
 
                     <button
                         onClick={() => {
-                            //setAppliedFilters(filters);
-                            setPage(1);
-
-                            setSearchParams({
-                                ...(filters.from && { from: filters.from }),
-                                ...(filters.to && { to: filters.to }),
-                                ...(filters.recruiter && { recruiter: filters.recruiter }),
-                                ...(filters.candidate && { candidate: filters.candidate }),
-                                page: 1
-                            });
+                            const today = new Date().toISOString().split("T")[0];
+                            updateFilters({ from: today, to: today, page: "1" });
                         }}
-                        className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
+                        className="btn-secondary w-full"
                     >
-                        <MagnifyingGlassIcon className="h-4 w-4" />
+                        Today
+                    </button>
+
+                    <button
+                        onClick={() => updateFilters({ page: "1" })}
+                        className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 transition-colors"
+                    >
+                        <Search className="h-4 w-4" />
                         Search
                     </button>
 
                     <button
-                        onClick={() => {
-                            setFilters({
-                                from: "",
-                                to: "",
-                                recruiter: "",
-                                candidate: ""
-                            });
-                            //setAppliedFilters(null);
-                            setPage(1);
-                            setSearchParams({});
-                        }}
-                        className="flex items-center justify-center gap-2 border px-4 py-2 rounded-lg text-sm hover:bg-gray-100"
+                        onClick={() => updateFilters({ from: "", to: "", recruiter: "", candidate: "", sort: "DESC", page: "1" })}
+                        className="flex items-center justify-center gap-2 border px-4 py-2 rounded-lg text-sm hover:bg-gray-100 transition-colors"
                     >
-                        <XMarkIcon className="h-4 w-4" />
+                        <X className="h-4 w-4" />
                         Clear
                     </button>
                 </div>
             </div>
+
+            {error && (
+                <div className="mb-6 bg-red-50 border-l-4 border-red-400 p-4 rounded-md flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-red-500" />
+                    <div>
+                        <p className="text-sm font-bold text-red-800">Connection Failed</p>
+                        <p className="text-sm text-red-700">{error}</p>
+                    </div>
+                </div>
+            )}
 
             {/* SUMMARY */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -220,16 +211,7 @@ const AdminJobAssigmentReportPage = () => {
                                 className="p-3 cursor-pointer select-none"
                                 onClick={() => {
                                     const next = sortOrder === "DESC" ? "ASC" : "DESC";
-                                    setSortOrder(next);
-
-                                    setSearchParams({
-                                        ...(filters.from && { from: filters.from }),
-                                        ...(filters.to && { to: filters.to }),
-                                        ...(filters.recruiter && { recruiter: filters.recruiter }),
-                                        ...(filters.candidate && { candidate: filters.candidate }),
-                                        sort: next,
-                                        page: 1
-                                    });
+                                    updateFilters({ sort: next, page: "1" });
                                 }}
                             >
                                 Date{" "}
@@ -248,14 +230,18 @@ const AdminJobAssigmentReportPage = () => {
                     <tbody>
                         {loading ? (
                             <tr>
-                                <td colSpan={6} className="p-6 text-center text-gray-400">
-                                    Loading analytics…
+                                <td colSpan={6} className="p-0">
+                                    <TableSkeleton cols={6} rows={7} />
                                 </td>
                             </tr>
                         ) : filteredRows.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="p-6 text-center text-gray-400">
-                                    No data found
+                                <td colSpan={6}>
+                                    <EmptyState
+                                        icon="search"
+                                        title="No data found"
+                                        description="Try adjusting your date range or filters."
+                                    />
                                 </td>
                             </tr>
                         ) : (
@@ -281,32 +267,20 @@ const AdminJobAssigmentReportPage = () => {
                 <div className="flex gap-3">
                     <button
                         disabled={page === 1}
-                        onClick={() => {
-                            const next = page - 1;
-                            setPage(next);
-                            setSearchParams({
-                                ...Object.fromEntries(searchParams),
-                                page: next
-                            });
-                        }}
-                        className="px-3 py-1 border rounded disabled:opacity-40"
+                        onClick={() => updateFilters({ page: page - 1 })}
+                        className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
-                        Prev
+                        <span className="sr-only">Previous</span>
+                        <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                     </button>
 
                     <button
                         disabled={page === totalPages || totalPages === 0}
-                        onClick={() => {
-                            const next = page + 1;
-                            setPage(next);
-                            setSearchParams({
-                                ...Object.fromEntries(searchParams),
-                                page: next
-                            });
-                        }}
-                        className="px-3 py-1 border rounded disabled:opacity-40"
+                        onClick={() => updateFilters({ page: page + 1 })}
+                        className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
-                        Next
+                        <span className="sr-only">Next</span>
+                        <ChevronRight className="h-5 w-5" aria-hidden="true" />
                     </button>
                 </div>
             </div>
@@ -319,9 +293,9 @@ const AdminJobAssigmentReportPage = () => {
    SUMMARY CARD
 ====================== */
 const SummaryCard = ({ title, value }) => (
-    <div className="bg-white rounded-lg shadow p-4">
-        <p className="text-sm text-gray-500">{title}</p>
-        <p className="text-2xl font-semibold">{value}</p>
+    <div className="stat-card">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{title}</p>
+        <p className="text-3xl font-bold text-gray-900">{value}</p>
     </div>
 );
 

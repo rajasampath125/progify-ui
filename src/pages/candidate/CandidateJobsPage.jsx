@@ -5,98 +5,130 @@ import {
     downloadResume,
 } from "../../api/candidateApi";
 import { useSearchParams } from "react-router-dom";
+import {
+    Search, AlertTriangle, ExternalLink,
+    ChevronLeft, ChevronRight, CheckCircle2, Download, Calendar,
+} from "lucide-react";
+import TableSkeleton from "../../components/ui/TableSkeleton";
+import EmptyState from "../../components/ui/EmptyState";
+
+// Returns YYYY-MM-DD in LOCAL timezone (not UTC — avoids "tomorrow" bug)
+const getTodayDate = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+};
 
 const CandidateJobsPage = () => {
+
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [totalPages, setTotalPages] = useState(0);
+    const [totalJobs, setTotalJobs] = useState(0);
     const [searchTitle, setSearchTitle] = useState("");
-    const [statusFilter, setStatusFilter] = useState("ALL");
+    const [dateFilter, setDateFilter] = useState(getTodayDate());
+    const [error, setError] = useState("");
+    const [searchParams, setSearchParams] = useSearchParams();
+    const page = Number(searchParams.get("page") || 1);
+    const pageSize = Number(searchParams.get("pageSize") || 10);
 
-    const [dateFilter, setDateFilter] = useState("");
-
-    useEffect(() => {
+    const fetchJobs = (pg, size, title, date) => {
         setLoading(true);
-        getAvailableJobs()
-            .then((res) => setJobs(res.data))
+        setError("");
+        getAvailableJobs(pg - 1, size, title, date)
+            .then((res) => {
+                const data = res?.data;
+                if (data && data.content) {
+                    setJobs(data.content);
+                    setTotalPages(data.totalPages ?? 0);
+                    setTotalJobs(data.totalElements ?? 0);
+                } else if (Array.isArray(data)) {
+                    setJobs(data);
+                    setTotalPages(1);
+                    setTotalJobs(data.length);
+                } else {
+                    setJobs([]);
+                    setTotalPages(0);
+                    setTotalJobs(0);
+                }
+            })
+            .catch((err) => {
+                console.error("Fetch Jobs Error:", err);
+                if (!err.response) {
+                    setError("Network Error: Backend server is unreachable.");
+                } else {
+                    setError("Failed to load jobs.");
+                }
+                setJobs([]);
+                setTotalPages(0);
+                setTotalJobs(0);
+            })
             .finally(() => setLoading(false));
-    }, []);
-
-
-    const handleApply = async (jobId) => {
-        await applyToJob(jobId);
-        const res = await getAvailableJobs();
-        setJobs(res.data);
     };
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            getAvailableJobs().then((res) => setJobs(res.data));
-        }, 60000);
+        fetchJobs(page, pageSize, searchTitle, dateFilter);
+    }, [page, pageSize, searchTitle, dateFilter]);
 
-        return () => clearInterval(interval);
-    }, []);
+    const handleApply = async (jobId) => {
+        await applyToJob(jobId);
+        fetchJobs(page, pageSize, searchTitle, dateFilter);
+    };
 
-    const [searchParams, setSearchParams] = useSearchParams();
+    const handleTitleChange = (value) => {
+        setSearchTitle(value);
+        setSearchParams({ page: 1, pageSize });
+    };
 
-    const page = Number(searchParams.get("page") || 1);
-    const pageSize = Number(searchParams.get("pageSize") || 5);
+    const handleDateChange = (value) => {
+        setDateFilter(value);
+        setSearchParams({ page: 1, pageSize });
+    };
 
-    const filteredJobs = jobs.filter((job) => {
-        const matchesTitle =
-            !searchTitle ||
-            job.title?.toLowerCase().includes(searchTitle.toLowerCase());
+    const handleTodayFilter = () => {
+        const today = getTodayDate();
+        setDateFilter(today);
+        setSearchParams({ page: 1, pageSize });
+    };
 
-        const matchesDate =
-            !dateFilter ||
-            job.createdAt?.startsWith(dateFilter);
-
-        return matchesTitle && matchesDate;
-    });
-    const totalJobs = filteredJobs.length;
-    const totalPages = Math.ceil(totalJobs / pageSize);
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = Math.min(startIndex + pageSize, totalJobs);
-    const paginatedJobs = filteredJobs.slice(startIndex, endIndex);
+    const handleClear = () => {
+        setSearchTitle("");
+        setDateFilter("");
+        setSearchParams({ page: 1, pageSize });
+    };
 
     const goToPage = (newPage) => {
         if (newPage < 1 || newPage > totalPages) return;
         setSearchParams({ page: newPage, pageSize });
     };
 
-    const changePageSize = (newSize) => {
-        setSearchParams({ page: 1, pageSize: newSize });
-    };
-
-    const handleDownload = async (jobId) => {
+    const handleDownload = async (job) => {
         try {
-            const response = await downloadResume(jobId);
-
+            const response = await downloadResume(job.jobId);
             const blob = new Blob([response.data], {
                 type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             });
-
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-
-            const contentDisposition = response.headers["content-disposition"];
-            let fileName = "resume.docx";
-
-            if (contentDisposition) {
-                const match = contentDisposition.match(/filename="(.+)"/);
-                if (match?.length === 2) {
-                    fileName = match[1];
+            let candidateName = "Candidate";
+            try {
+                const profileObjStr = localStorage.getItem("candidateProfile");
+                if (profileObjStr) {
+                    const profile = JSON.parse(profileObjStr);
+                    if (profile.name) candidateName = profile.name;
                 }
-            }
-
-            a.download = fileName;
+            } catch (e) { }
+            const safeName = candidateName.replace(/[^a-zA-Z0-9]/g, "_");
+            const safeTitle = job.title ? job.title.replace(/[^a-zA-Z0-9]/g, "_") : "Job";
+            a.download = `${safeName}_${safeTitle}.docx`;
             document.body.appendChild(a);
             a.click();
             a.remove();
-
             window.URL.revokeObjectURL(url);
         } catch (error) {
-            console.error("Download error:", error);
             if (error.response?.status === 410) {
                 alert("Resume expired. Please contact recruiter.");
             } else {
@@ -105,177 +137,171 @@ const CandidateJobsPage = () => {
         }
     };
 
+    const paginatedJobs = jobs || [];
+    const startItem = totalJobs === 0 ? 0 : (page - 1) * pageSize + 1;
+    const endItem = Math.min(page * pageSize, totalJobs);
 
     return (
-        <div
-            style={{
-                padding: "40px 24px",
-                maxWidth: "1100px",
-                margin: "0 auto",
-            }}
-        >
-            {loading && (
-                <div style={{ padding: "24px", color: "#9ca3af" }}>
-                    Loading available jobs…
-                </div>
-            )}
-
-            {/* <a href="/candidate/dashboard">← Back to Dashboard</a> */}
-            <h1 style={{ marginBottom: "24px" }}>Available Jobs</h1>
-
-            {/* FILTER BAR */}
-            <div
-                style={{
-                    display: "flex",
-                    gap: "12px",
-                    marginBottom: "16px",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                }}
-            >
-                <input
-                    placeholder="Search by job title"
-                    value={searchTitle}
-                    onChange={(e) => setSearchTitle(e.target.value)}
-                    style={{
-                        padding: "8px 10px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "6px",
-                        fontSize: "14px",
-                        width: "220px",
-                    }}
-                />
-
-                <input
-                    type="date"
-                    value={dateFilter}
-                    onChange={(e) => setDateFilter(e.target.value)}
-                    style={{
-                        padding: "8px 10px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "6px",
-                        fontSize: "14px",
-                    }}
-                />
-
-                <button
-                    onClick={() => {
-                        setSearchTitle("");
-                        setDateFilter("");
-                    }}
-                    style={{
-                        padding: "8px 14px",
-                        borderRadius: "6px",
-                        border: "1px solid #d1d5db",
-                        background: "#ffffff",
-                        cursor: "pointer",
-                    }}
-                >
-                    Clear
-                </button>
+        <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 animate-fade-in">
+            {/* PAGE HEADER */}
+            <div className="mb-8">
+                <h1 className="page-header">Available Jobs</h1>
+                <p className="page-subheader">Jobs assigned to you — review and apply to each one.</p>
             </div>
 
-            {jobs.length === 0 && (
-                <div
-                    style={{
-                        marginTop: "40px",
-                        padding: "40px",
-                        textAlign: "center",
-                        borderRadius: "12px",
-                        color: "#d44848",
-                        background: "#fafafa",
-                        fontSize: "15px",
-                    }}
-                >
-                    <strong>No Available Jobs found today</strong>
-                    <div style={{ marginTop: "8px", fontSize: "13px" }}>
-                        Please check back later — new opportunities are added regularly.
+            {error && (
+                <div className="mb-6 bg-red-50 border-l-4 border-red-400 p-4 rounded-xl flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
+                    <div>
+                        <p className="text-sm font-bold text-red-800">Connection Failed</p>
+                        <p className="text-sm text-red-700">{error}</p>
                     </div>
                 </div>
             )}
 
-            {jobs.length > 0 && (
-                <>
+            {/* FILTER BAR */}
+            <div className="mb-6 bg-white rounded-2xl shadow-sm ring-1 ring-slate-900/5 p-4 flex flex-col sm:flex-row gap-3 items-center">
+                {/* Search */}
+                <div className="relative flex-1 min-w-0 w-full sm:max-w-xs">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                    <input
+                        placeholder="Search by job title..."
+                        value={searchTitle}
+                        onChange={(e) => handleTitleChange(e.target.value)}
+                        className="block w-full rounded-xl border-0 py-2 pl-9 pr-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 text-sm"
+                    />
+                </div>
 
-                    <div
-                        style={{
-                            border: "1px solid #e5e7eb",
-                            borderRadius: "12px",
-                            overflow: "hidden",
-                            background: "#ffffff",
-                        }}
-                    >
-                        <table
-                            style={{
-                                width: "100%",
-                                borderCollapse: "collapse",
-                            }}
-                        >
-                            <thead>
-                                <tr
-                                    style={{
-                                        background: "#f9fafb",
-                                        textAlign: "left",
-                                    }}
-                                >
-                                    <th style={th}>Job Title</th>
-                                    <th style={th}>Links</th>
-                                    <th style={th}>Resume</th>
-                                    <th style={th}>Status</th>
-                                    <th style={th}>Created At</th>
-                                    <th style={th}>Action</th>
+                {/* Date */}
+                <div className="relative w-full sm:w-auto">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                    <input
+                        type="date"
+                        value={dateFilter}
+                        onChange={(e) => handleDateChange(e.target.value)}
+                        className="block w-full sm:w-auto rounded-xl border-0 py-2 pl-9 pr-3 text-slate-700 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-500 text-sm"
+                    />
+                </div>
+
+                {/* Today quick btn */}
+                <button
+                    onClick={handleTodayFilter}
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold shadow-sm ring-1 ring-inset transition-all ${dateFilter === getTodayDate()
+                        ? "bg-indigo-600 text-white ring-indigo-600 hover:bg-indigo-500"
+                        : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                        }`}
+                >
+                    Today's Jobs
+                </button>
+
+                <button
+                    onClick={handleClear}
+                    className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors px-2 py-2 sm:ml-auto"
+                >
+                    Clear Filters
+                </button>
+            </div>
+
+            {/* LOADING */}
+            {loading && (
+                <div className="bg-white shadow-sm ring-1 ring-slate-900/5 rounded-2xl overflow-hidden">
+                    <TableSkeleton cols={6} rows={10} />
+                </div>
+            )}
+
+            {/* EMPTY STATE */}
+            {!loading && paginatedJobs.length === 0 && (
+                <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-900/5">
+                    <EmptyState
+                        icon="jobs"
+                        title={dateFilter === getTodayDate() ? "No jobs assigned for today" : "No available jobs found"}
+                        description={dateFilter === getTodayDate() ? "No jobs have been assigned for today's date." : "Please check back later — new opportunities are added regularly."}
+                        action={dateFilter ? { label: "Show All Jobs", onClick: handleClear } : undefined}
+                    />
+                </div>
+            )}
+
+            {/* TABLE */}
+            {!loading && paginatedJobs.length > 0 && (
+                <div className="bg-white shadow-sm ring-1 ring-slate-900/5 rounded-2xl overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-slate-100">
+                            <thead className="bg-slate-50">
+                                <tr>
+                                    <th className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Job Title</th>
+                                    <th className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Links</th>
+                                    <th className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Resume</th>
+                                    <th className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                    <th className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Created At</th>
+                                    <th className="px-5 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
                                 </tr>
                             </thead>
-
-                            <tbody>
+                            <tbody className="divide-y divide-slate-100 bg-white">
                                 {paginatedJobs.map((job) => (
-                                    <tr
-                                        key={job.jobId}
-                                        style={{
-                                            borderTop: "1px solid #e5e7eb",
-                                        }}
-                                    >
-                                        <td style={td}>{job.title}</td>
-
-                                        <td style={td}>
-                                            <a
-                                                href={job.jobLink}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                style={link}
-                                            >
-                                                Job Link
-                                            </a>
+                                    <tr key={job.jobId} className="hover:bg-slate-50/70 transition-colors">
+                                        {/* TITLE */}
+                                        <td className="whitespace-nowrap px-5 py-3.5 text-sm font-semibold text-slate-800 max-w-[200px] truncate">
+                                            {job.title}
                                         </td>
 
-                                        <td style={td}>
+                                        {/* JOB LINK */}
+                                        <td className="whitespace-nowrap px-5 py-3.5 text-sm">
+                                            {job.jobLink && job.jobLink !== "N/A" ? (
+                                                <a
+                                                    href={job.jobLink}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-500 font-medium transition-colors"
+                                                >
+                                                    <ExternalLink className="w-3.5 h-3.5" />
+                                                    Job Link
+                                                </a>
+                                            ) : (
+                                                <span className="text-slate-400 text-xs italic">N/A</span>
+                                            )}
+                                        </td>
+
+                                        {/* RESUME DOWNLOAD */}
+                                        <td className="whitespace-nowrap px-5 py-3.5 text-sm">
                                             <button
-                                                onClick={() => handleDownload(job.jobId)}
-                                                style={secondaryBtn}
-                                            ><i className="fa fa-download" style={{ marginRight: 6 }} />Resume
+                                                onClick={() => handleDownload(job)}
+                                                className="inline-flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-inset ring-slate-200 hover:bg-slate-50 hover:-translate-y-0.5 transform transition-all"
+                                            >
+                                                <Download className="w-3.5 h-3.5 text-slate-500" />
+                                                Resume
                                             </button>
                                         </td>
 
-                                        <td style={td}>
-                                            <StatusPill status={job.applied} />
+                                        {/* STATUS */}
+                                        <td className="whitespace-nowrap px-5 py-3.5 text-sm">
+                                            {job.applied ? (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                                                    <CheckCircle2 className="w-3 h-3" /> Applied
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
+                                                    Not Applied
+                                                </span>
+                                            )}
                                         </td>
 
-                                        <td style={td}>
-                                            {job.createdAt
-                                                ? new Date(job.createdAt).toLocaleDateString()
-                                                : "-"}
+                                        {/* CREATED AT */}
+                                        <td className="whitespace-nowrap px-5 py-3.5 text-sm text-slate-500">
+                                            {job.createdAt ? new Date(job.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}
                                         </td>
 
-                                        <td style={td}>
+                                        {/* ACTION */}
+                                        <td className="whitespace-nowrap px-5 py-3.5 text-sm font-medium text-right">
                                             {!job.applied ? (
                                                 <button
                                                     onClick={() => handleApply(job.jobId)}
-                                                    style={primaryBtn}
+                                                    className="inline-flex items-center rounded-lg bg-indigo-600 px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 hover:-translate-y-0.5 transform transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                                                 >
                                                     Apply
                                                 </button>
                                             ) : (
-                                                <span style={{ color: "#16a34a", fontWeight: 500 }}>
+                                                <span className="inline-flex items-center gap-1.5 text-emerald-600 font-semibold text-sm">
+                                                    <CheckCircle2 className="w-4 h-4" />
                                                     Applied
                                                 </span>
                                             )}
@@ -286,130 +312,37 @@ const CandidateJobsPage = () => {
                         </table>
                     </div>
 
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            marginTop: "20px",
-                            gap: "12px",
-                            flexWrap: "wrap",
-                        }}
-                    >
-                        {/* LEFT — COUNT */}
-                        <div style={{ fontSize: "13px", color: "#6b7280" }}>
-                            Showing {totalJobs === 0 ? 0 : startIndex + 1}–{endIndex} of {totalJobs} jobs
-                        </div>
-
-                        {/* CENTER — PAGINATION */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {/* PAGINATION — simple Prev / page-indicator / Next */}
+                    <div className="flex items-center justify-between border-t border-slate-100 bg-white px-5 py-3">
+                        <p className="text-sm text-slate-600">
+                            Showing <span className="font-semibold text-slate-900">{startItem}</span>–<span className="font-semibold text-slate-900">{endItem}</span> of <span className="font-semibold text-slate-900">{totalJobs}</span> results
+                        </p>
+                        <nav className="isolate inline-flex -space-x-px rounded-xl shadow-sm">
                             <button
-                                disabled={page === 1}
                                 onClick={() => goToPage(page - 1)}
+                                disabled={page === 1}
+                                className="relative inline-flex items-center gap-1 rounded-l-xl px-3 py-2 text-sm font-medium text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                             >
+                                <ChevronLeft className="h-4 w-4" />
                                 Prev
                             </button>
-
-                            <span style={{ fontSize: "13px" }}>
-                                Page {page} of {totalPages || 1}
+                            <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200 bg-white select-none">
+                                {page} / {totalPages || 1}
                             </span>
-
                             <button
-                                disabled={page === totalPages || totalPages === 0}
                                 onClick={() => goToPage(page + 1)}
+                                disabled={page === totalPages || totalPages === 0}
+                                className="relative inline-flex items-center gap-1 rounded-r-xl px-3 py-2 text-sm font-medium text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                             >
                                 Next
+                                <ChevronRight className="h-4 w-4" />
                             </button>
-                        </div>
-
-                        {/* RIGHT — PAGE JUMP + PAGE SIZE */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ fontSize: "13px" }}>Go to</span>
-
-                            <input
-                                type="number"
-                                min="1"
-                                max={totalPages}
-                                value={page}
-                                onChange={(e) => goToPage(Number(e.target.value))}
-                                style={{ width: "60px", padding: "4px" }}
-                            />
-
-                            <select
-                                value={pageSize}
-                                onChange={(e) => changePageSize(Number(e.target.value))}
-                            >
-                                <option value={5}>5</option>
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                            </select>
-                        </div>
+                        </nav>
                     </div>
-                </>
+                </div>
             )}
         </div>
     );
-}
-
-/* ===================== */
-/* Styles (local only)   */
-/* ===================== */
-const th = {
-    padding: "14px 16px",
-    fontSize: "14px",
-    fontWeight: 600,
-    color: "#374151",
 };
-
-const td = {
-    padding: "14px 16px",
-    fontSize: "14px",
-    color: "#111827",
-    verticalAlign: "middle",
-};
-
-const link = {
-    color: "#2563eb",
-    textDecoration: "none",
-    fontWeight: 500,
-};
-
-const primaryBtn = {
-    padding: "6px 14px",
-    borderRadius: "8px",
-    border: "none",
-    background: "#2563eb",
-    color: "#ffffff",
-    cursor: "pointer",
-};
-
-const secondaryBtn = {
-    padding: "6px 12px",
-    borderRadius: "8px",
-    border: "1px solid #d1d5db",
-    background: "#ffffff",
-    cursor: "pointer",
-};
-
-function StatusPill({ applied }) {
-
-    return (
-        <span
-            style={{
-                padding: "4px 12px",
-                borderRadius: "999px",
-                fontSize: "12px",
-                fontWeight: 600,
-                background: applied ? "#dcfce7" : "#fef3c7",
-                color: applied ? "#166534" : "#92400e",
-            }}
-        >
-            {applied ? "APPLIED" : "NOT APPLIED"}
-        </span>
-    );
-}
-
-
-
 
 export default CandidateJobsPage;

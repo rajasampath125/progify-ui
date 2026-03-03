@@ -1,56 +1,54 @@
 import { useAuth } from "../auth/useAuth";
+import { Link } from "react-router-dom";
+import clouvrLogo from "../images/clouvr-logo1.webp";
 
 function PublicHeader({ onLoginClick }) {
   const { auth } = useAuth();
 
   return (
-    <header style={styles.header}>
-      <div style={styles.logo}>ProgifyTech</div>
+    <header className="h-16 bg-gradient-to-r from-indigo-700 to-indigo-600 shadow-lg sticky top-0 z-40">
+      <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+        {/* LOGO */}
+        <Link
+          to="/"
+          className="flex items-center gap-2 text-white font-bold text-xl tracking-tight no-underline"
+        >
+          <img
+            src={clouvrLogo}
+            alt="Clouvr"
+            className="h-8 w-auto brightness-0 invert"
+          />
+          {/* <span>Clouvr</span> */}
+        </Link>
 
-      <div style={styles.actions}>
-        <a href="/contact" style={styles.link}>Contact Us</a>
+        {/* ACTIONS */}
+        <div className="flex items-center gap-3">
+          {/* <a
+            href="/contact"
+            className="text-indigo-100 hover:text-white text-sm font-medium transition-colors"
+          >
+            Contact Us
+          </a> */}
 
-        {!auth?.token ? (
-          <button style={styles.loginBtn} onClick={onLoginClick}>
-            Login
-          </button>
-        ) : (
-          <a href="/candidate/dashboard" style={styles.dashboardBtn}>
-            Return to Dashboard
-          </a>
-        )}
+          {!auth?.token ? (
+            <button
+              onClick={onLoginClick}
+              className="bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-gray-900 font-semibold text-sm px-5 py-2 rounded-full shadow transition-all duration-150"
+            >
+              Login
+            </button>
+          ) : (
+            <a
+              href="/candidate/dashboard"
+              className="bg-amber-400 hover:bg-amber-300 text-gray-900 font-semibold text-sm px-5 py-2 rounded-full shadow transition-all duration-150 no-underline"
+            >
+              Dashboard →
+            </a>
+          )}
+        </div>
       </div>
     </header>
   );
 }
-
-const styles = {
-  header: {
-    height: "64px",
-    background: "#3b5ccc",
-    color: "#fff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "0 32px",
-  },
-  logo: { fontSize: "20px", fontWeight: 600 },
-  actions: { display: "flex", gap: "16px", alignItems: "center" },
-  link: { color: "#fff", textDecoration: "none" },
-  loginBtn: {
-    background: "#facc15",
-    border: "none",
-    padding: "8px 16px",
-    borderRadius: "20px",
-    cursor: "pointer",
-  },
-  dashboardBtn: {
-    background: "#facc15",
-    color: "#000",
-    padding: "8px 16px",
-    borderRadius: "20px",
-    textDecoration: "none",
-  },
-};
 
 export default PublicHeader;
