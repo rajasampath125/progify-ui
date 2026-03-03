@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getAllCandidatesForRecruiter, getAllJobsCandidates } from "../../api/recruiterApi";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -16,19 +16,26 @@ import EmptyState from "../../components/ui/EmptyState";
 
 const RecruiterCandidatesPage = () => {
   const [candidates, setCandidates] = useState([]);
+  const [jobCandidatesMap, setJobCandidatesMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const search = searchParams.get("q") || "";
   const categoryFilter = searchParams.get("category") || "ALL";
   const currentPage = Number(searchParams.get("page")) || 1;
-  const pageSize = Number(searchParams.get("size")) || 5;
+  const pageSize = Number(searchParams.get("size")) || 15;
 
   const [selectedCandidate, setSelectedCandidate] = useState(null);
-  const [candidateStatsLoading, setCandidateStatsLoading] = useState(false);
-  const [candidateStats, setCandidateStats] = useState({ assigned: 0, applied: 0, pending: 0, rate: "0%" });
+  // No separate candidateStats state — computed via useMemo instantly from cache
 
   const navigate = useNavigate();
+
+  // Debounced search — prevents filtering 100k rows on every keystroke
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const updateFilters = (updates) => {
     const newParams = new URLSearchParams(searchParams);
@@ -47,8 +54,13 @@ const RecruiterCandidatesPage = () => {
   useEffect(() => {
     setLoading(true);
     setError("");
-    getAllCandidatesForRecruiter().then((res) => {
-      setCandidates(res.data);
+    // Fetch both in parallel — only ONE call to getAllJobsCandidates ever
+    Promise.all([
+      getAllCandidatesForRecruiter(),
+      getAllJobsCandidates(),
+    ]).then(([candidatesRes, jobsRes]) => {
+      setCandidates(candidatesRes.data);
+      setJobCandidatesMap(jobsRes.data || {});
     }).catch((err) => {
       console.error("Failed to load candidates", err);
       if (!err.response) {
@@ -59,52 +71,38 @@ const RecruiterCandidatesPage = () => {
     }).finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    if (!selectedCandidate) return;
-
-    const loadStats = async () => {
-      setCandidateStatsLoading(true);
-      try {
-        const candidatesRes = await getAllJobsCandidates();
-        let assigned = 0;
-        let applied = 0;
-
-        const allMap = candidatesRes.data || {};
-        Object.values(allMap).forEach(jobCandidates => {
-          const records = jobCandidates.filter(c => c.candidateEmail === selectedCandidate.email);
-          for (const r of records) {
-            assigned += 1;
-            if (r.applicationStatus === "APPLIED") applied += 1;
-          }
-        });
-
-        const pending = assigned - applied;
-        const rate = assigned === 0 ? "0%" : `${Math.round((applied / assigned) * 100)}%`;
-        setCandidateStats({ assigned, applied, pending, rate });
-      } catch (e) {
-        console.error("Failed to load candidate stats", e);
-      } finally {
-        setCandidateStatsLoading(false);
+  // Compute stats instantly with useMemo — no setState, no extra render
+  const candidateStats = useMemo(() => {
+    if (!selectedCandidate) return { assigned: 0, applied: 0, pending: 0, rate: "0%" };
+    let assigned = 0, applied = 0;
+    Object.values(jobCandidatesMap).forEach(jobCandidates => {
+      for (const r of jobCandidates) {
+        if (r.candidateEmail === selectedCandidate.email) {
+          assigned++;
+          if (r.applicationStatus === "APPLIED") applied++;
+        }
       }
-    };
-    loadStats();
-  }, [selectedCandidate]);
+    });
+    const pending = assigned - applied;
+    const rate = assigned === 0 ? "0%" : `${Math.round((applied / assigned) * 100)}%`;
+    return { assigned, applied, pending, rate };
+  }, [selectedCandidate, jobCandidatesMap]);
 
-  const categories = [
+  const categories = useMemo(() => [
     ...new Set(candidates.map((c) => c.category).filter(Boolean)),
-  ];
+  ], [candidates]);
 
-  const filteredCandidates = candidates.filter((c) => {
+  const filteredCandidates = useMemo(() => candidates.filter((c) => {
     const matchesCategory =
       categoryFilter === "ALL" || c.category === categoryFilter;
 
-    const searchLower = (search || "").toLowerCase();
+    const searchLower = (debouncedSearch || "").toLowerCase();
     const matchesSearch =
       (c.name || "").toLowerCase().includes(searchLower) ||
       (c.email || "").toLowerCase().includes(searchLower);
 
     return matchesCategory && matchesSearch;
-  });
+  }), [candidates, categoryFilter, debouncedSearch]);
 
   const totalCandidates = filteredCandidates.length;
   const totalPages = Math.ceil(totalCandidates / pageSize);
@@ -118,12 +116,8 @@ const RecruiterCandidatesPage = () => {
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="sm:flex sm:items-center sm:justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:tracking-tight">
-            Candidates List
-          </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            View and manage candidates assigned to your jobs.
-          </p>
+          <h1 className="page-header">Candidates List</h1>
+          <p className="page-subheader">View and manage candidates assigned to your jobs.</p>
         </div>
       </div>
 
@@ -195,18 +189,18 @@ const RecruiterCandidatesPage = () => {
           </div>
 
           {/* TABLE */}
-          <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-hidden">
+          <div className="bg-white shadow-sm ring-1 ring-slate-900/5 sm:rounded-2xl overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-slate-100">
+                <thead className="bg-slate-50">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                    <th scope="col" className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Name</th>
+                    <th scope="col" className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Email</th>
+                    <th scope="col" className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Category</th>
+                    <th scope="col" className="px-5 py-3.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
+                <tbody className="divide-y divide-slate-100 bg-white">
                   {loading ? (
                     <tr>
                       <td colSpan={4} className="p-0">
@@ -227,28 +221,28 @@ const RecruiterCandidatesPage = () => {
                     </tr>
                   ) : (
                     paginatedCandidates.map((c) => (
-                      <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                      <tr key={c.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="whitespace-nowrap px-5 py-3.5 text-sm font-medium text-slate-900">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-medium text-indigo-700">
-                              {(c.name || c.email || "Unknown").charAt(0).toUpperCase()}
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-sm font-bold text-white shadow-sm">
+                              {(c.name || c.email || "U").charAt(0).toUpperCase()}
                             </div>
-                            {c.name || "Unknown"}
+                            <span>{c.name || "Unknown"}</span>
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">{c.email}</td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                          <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">
+                        <td className="whitespace-nowrap px-5 py-3.5 text-sm text-slate-500">{c.email}</td>
+                        <td className="whitespace-nowrap px-5 py-3.5 text-sm">
+                          <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200">
                             {c.category || "Uncategorized"}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-right flex justify-end gap-2 text-indigo-600">
+                        <td className="whitespace-nowrap px-5 py-3.5 text-sm font-medium text-right">
                           <button
-                            className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-900 transition-colors bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-md"
+                            className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-150 shadow-sm"
                             onClick={() => setSelectedCandidate(c)}
                             title="View Profile"
                           >
-                            <User className="w-4 h-4" />
+                            <Eye className="w-3.5 h-3.5" />
                             Profile
                           </button>
                         </td>
@@ -261,50 +255,29 @@ const RecruiterCandidatesPage = () => {
 
             {/* PAGINATION */}
             {filteredCandidates.length > 0 && (
-              <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-                <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-4">
-                    <p className="text-sm text-gray-700">
-                      Showing <span className="font-medium">{(currentPage - 1) * pageSize + 1}</span> to <span className="font-medium">{Math.min(currentPage * pageSize, totalCandidates)}</span> of <span className="font-medium">{totalCandidates}</span> results
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <label htmlFor="pageSizeSelect" className="text-sm text-gray-700">Items per page:</label>
-                      <select
-                        id="pageSizeSelect"
-                        value={pageSize}
-                        onChange={(e) => {
-                          updateFilters({ size: e.target.value, page: 1 });
-                        }}
-                        className="block rounded-md border-0 py-1 pl-3 pr-8 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                      >
-                        <option value={5}>5</option>
-                        <option value={10}>10</option>
-                        <option value={20}>20</option>
-                        <option value={50}>50</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                      <button
-                        onClick={() => updateFilters({ page: currentPage - 1 })}
-                        disabled={currentPage === 1}
-                        className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <span className="sr-only">Previous</span>
-                        <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-                      </button>
-                      <button
-                        onClick={() => updateFilters({ page: currentPage + 1 })}
-                        disabled={currentPage === totalPages || totalPages === 0}
-                        className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <span className="sr-only">Next</span>
-                        <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                      </button>
-                    </nav>
-                  </div>
-                </div>
+              <div className="flex items-center justify-between border-t border-slate-100 bg-white px-5 py-3">
+                <p className="text-sm text-slate-600">
+                  Showing <span className="font-semibold text-slate-900">{(currentPage - 1) * pageSize + 1}</span>–<span className="font-semibold text-slate-900">{Math.min(currentPage * pageSize, totalCandidates)}</span> of <span className="font-semibold text-slate-900">{totalCandidates}</span> results
+                </p>
+                <nav className="isolate inline-flex -space-x-px rounded-xl shadow-sm">
+                  <button
+                    onClick={() => updateFilters({ page: currentPage - 1 })}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center gap-1 rounded-l-xl px-3 py-2 text-sm font-medium text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Prev
+                  </button>
+                  <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200 bg-white select-none">
+                    {currentPage} / {totalPages || 1}
+                  </span>
+                  <button
+                    onClick={() => updateFilters({ page: currentPage + 1 })}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                    className="relative inline-flex items-center gap-1 rounded-r-xl px-3 py-2 text-sm font-medium text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next <ChevronRight className="h-4 w-4" />
+                  </button>
+                </nav>
               </div>
             )}
           </div>
@@ -360,29 +333,25 @@ const RecruiterCandidatesPage = () => {
                 <div className="px-0 py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
                   <dt className="text-sm font-medium leading-6 text-gray-900">Application Stats</dt>
                   <dd className="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0">
-                    {candidateStatsLoading ? (
-                      <span className="text-gray-400 italic">Calculating activity...</span>
-                    ) : (
-                      <div className="flex flex-col gap-1.5">
-                        <span className="inline-flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-blue-400"></span>
-                          Assigned: {candidateStats.assigned}
+                    <div className="flex flex-col gap-1.5">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />
+                        Assigned: {candidateStats.assigned}
+                      </span>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                        Applied: {candidateStats.applied}
+                      </span>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+                        Pending: {candidateStats.pending}
+                      </span>
+                      <span className="inline-flex items-center gap-2 mt-1">
+                        <span className="bg-gray-100 text-gray-800 text-xs font-semibold px-2 py-0.5 rounded">
+                          Hit Rate: {candidateStats.rate}
                         </span>
-                        <span className="inline-flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
-                          Applied: {candidateStats.applied}
-                        </span>
-                        <span className="inline-flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
-                          Pending: {candidateStats.pending}
-                        </span>
-                        <span className="inline-flex items-center gap-2 mt-1">
-                          <span className="bg-gray-100 text-gray-800 text-xs font-semibold px-2 py-0.5 rounded">
-                            Hit Rate: {candidateStats.rate}
-                          </span>
-                        </span>
-                      </div>
-                    )}
+                      </span>
+                    </div>
                   </dd>
                 </div>
               </dl>

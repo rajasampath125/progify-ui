@@ -22,6 +22,7 @@ import {
   deactivateRecruiterJob, activateRecruiterJob,
   deleteRecruiterJob, updateRecruiterJob
 } from "../../api/recruiterApi";
+import { invalidateRecruiterCache } from "../../context/RecruiterDataContext";
 import { useSearchParams } from "react-router-dom";
 import {
   Search,
@@ -99,7 +100,8 @@ const RecruiterJobsPage = () => {
   const deactivateJob = async (jobId) => {
     try {
       await deactivateRecruiterJob(jobId);
-      loadJobs(); // refresh list
+      invalidateRecruiterCache();
+      loadJobs();
     } catch (err) {
       console.error("Failed to deactivate job", err);
       alert("Failed to deactivate job");
@@ -109,6 +111,7 @@ const RecruiterJobsPage = () => {
   const activateJob = async (jobId) => {
     try {
       await activateRecruiterJob(jobId);
+      invalidateRecruiterCache();
       loadJobs();
     } catch (err) {
       console.error("Failed to activate job", err);
@@ -145,6 +148,7 @@ const RecruiterJobsPage = () => {
     try {
       setActionError("");
       await deleteRecruiterJob(jobToDelete.id);
+      invalidateRecruiterCache();
       loadJobs();
       setJobToDelete(null);
     } catch (err) {

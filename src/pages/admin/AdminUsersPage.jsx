@@ -8,14 +8,16 @@ import {
     createUser,
     updateUser,
     deleteUser,
-    changeUserEmail,
+    kickoutUser,
     changeUserPassword,
     resetUserPassword,
+    getActiveUsers,
 } from "../../api/adminApi";
 import {
     Search,
     UserPlus,
     Edit2,
+    UserX,
     Trash2,
     AlertTriangle,
     Shield,
@@ -26,7 +28,9 @@ import {
     KeyRound,
     RotateCcw,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    Eye,
+    EyeOff
 } from "lucide-react";
 import TableSkeleton from "../../components/ui/TableSkeleton";
 import EmptyState from "../../components/ui/EmptyState";
@@ -36,6 +40,8 @@ const AdminUsersPage = () => {
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [showCreatePassword, setShowCreatePassword] = useState(false);
+    const [showResetPassword, setShowResetPassword] = useState(false);
 
     // =======================
     // TABLE FILTERS
@@ -92,6 +98,7 @@ const AdminUsersPage = () => {
        DELETE USER STATE
     ======================= */
     const [userToDelete, setUserToDelete] = useState(null);
+    const [userToKickout, setUserToKickout] = useState(null);
 
     /* =======================
        CHANGE EMAIL STATE
@@ -143,12 +150,18 @@ const AdminUsersPage = () => {
     }, [users, search, roleFilter, statusFilter]);
 
 
+    // Add state for the Online toggle
+    const [showOnlineOnly, setShowOnlineOnly] = useState(false);
 
     // Initial Data Fetch
     useEffect(() => {
         setLoading(true);
         setError("");
-        Promise.all([getAllUsers(), getAllCategories()])
+
+        // Fetch either ALL users or ONLINE users based on the toggle!
+        const usersPromise = showOnlineOnly ? getActiveUsers() : getAllUsers();
+
+        Promise.all([usersPromise, getAllCategories()])
             .then(([u, c]) => {
                 setUsers(u.data);
                 setCategories(c.data);
@@ -162,7 +175,7 @@ const AdminUsersPage = () => {
                 }
             })
             .finally(() => setLoading(false));
-    }, []);
+    }, [showOnlineOnly]); // Re-fetch when the toggle changes
 
     // Pagination Derived State
     const totalRecords = filteredUsers.length;
@@ -287,13 +300,22 @@ const AdminUsersPage = () => {
                             {formData.role !== "CANDIDATE" && (
                                 <div>
                                     <label className="block text-sm font-medium leading-6 text-gray-900">Password</label>
-                                    <input
-                                        type="password"
-                                        className="mt-2 block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                                        placeholder="••••••••"
-                                        value={formData.password}
-                                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    />
+                                    <div className="relative mt-2">
+                                        <input
+                                            type={showCreatePassword ? "text" : "password"}
+                                            className="block w-full rounded-md border-0 py-1.5 px-3 pr-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                                            placeholder="••••••••"
+                                            value={formData.password}
+                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowCreatePassword(!showCreatePassword)}
+                                            className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
+                                        >
+                                            {showCreatePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
 
@@ -392,13 +414,27 @@ const AdminUsersPage = () => {
                     </select>
                 </div>
 
-                <button
-                    className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors border border-gray-200"
-                    onClick={() => updateFilters({ q: "", role: "ALL", status: "ALL" })}
-                >
-                    <X className="w-4 h-4" />
-                    Clear Filters
-                </button>
+                <div className="flex items-center gap-3">
+                    {/* Toggle Button */}
+                    <button
+                        onClick={() => setShowOnlineOnly(!showOnlineOnly)}
+                        className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-md transition-colors border ${showOnlineOnly
+                            ? "bg-green-100 text-green-800 border-green-200"
+                            : "bg-gray-50 text-gray-600 hover:bg-gray-100 border-gray-200"
+                            }`}
+                    >
+                        <div className={`w-2 h-2 rounded-full ${showOnlineOnly ? 'bg-green-600' : 'bg-gray-400'}`}></div>
+                        Online Now
+                    </button>
+                    {/* Clear Filters Button */}
+                    <button
+                        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors border border-gray-200"
+                        onClick={() => updateFilters({ q: "", role: "ALL", status: "ALL" })}
+                    >
+                        <X className="w-4 h-4" />
+                        Clear Filters
+                    </button>
+                </div>
             </div>
 
 
@@ -414,6 +450,7 @@ const AdminUsersPage = () => {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Login</th>
                                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
@@ -455,6 +492,9 @@ const AdminUsersPage = () => {
                                                     Inactive
                                                 </span>
                                             )}
+                                        </td>
+                                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                                            {u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Never'}
                                         </td>
                                         <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-right flex justify-end gap-3">
 
@@ -545,17 +585,32 @@ const AdminUsersPage = () => {
                                                 </button>
                                             )}
 
-                                            <button
-                                                disabled={u.email === loggedInEmail}
-                                                className={`text-red-500 hover:text-red-700 transition-colors p-1.5 rounded-md hover:bg-red-50 ${u.email === loggedInEmail ? "opacity-30 cursor-not-allowed hover:bg-transparent" : ""}`}
-                                                onClick={() => {
-                                                    if (u.email === loggedInEmail) return;
-                                                    setUserToDelete(u);
-                                                }}
-                                                title="Delete User"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            {u.role === "CANDIDATE" && !showOnlineOnly && (
+                                                <button
+                                                    disabled={u.email === loggedInEmail}
+                                                    className={`text-red-500 hover:text-red-700 transition-colors p-1.5 rounded-md hover:bg-red-50 ${u.email === loggedInEmail ? "opacity-30 cursor-not-allowed hover:bg-transparent" : ""}`}
+                                                    onClick={() => {
+                                                        if (u.email === loggedInEmail) return;
+                                                        setUserToDelete(u);
+                                                    }}
+                                                    title="Delete User"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            {u.role === "CANDIDATE" && showOnlineOnly && (
+                                                <button
+                                                    disabled={u.email === loggedInEmail}
+                                                    className={`text-red-500 hover:text-red-700 transition-colors p-1.5 rounded-md hover:bg-red-50 ${u.email === loggedInEmail ? "opacity-30 cursor-not-allowed hover:bg-transparent" : ""}`}
+                                                    onClick={() => {
+                                                        if (u.email === loggedInEmail) return;
+                                                        setUserToKickout(u);
+                                                    }}
+                                                    title="Kickout Candidate"
+                                                >
+                                                    <UserX className="w-4 h-4" />
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))
@@ -763,6 +818,59 @@ const AdminUsersPage = () => {
                 </div>
             )}
             {/* =======================
+             KICKOUT CONFIRMATION MODAL
+            ======================= */}
+            {userToKickout && (
+                <div className="relative z-50" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+                    <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
+                        <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                            <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-md border border-gray-100">
+                                <div className="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+                                    <div className="sm:flex sm:items-start">
+                                        <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                                            <UserX className="h-6 w-6 text-red-600" />
+                                        </div>
+                                        <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+                                            <h3 className="text-base font-semibold leading-6 text-gray-900" id="modal-title">Kickout User</h3>
+                                            <div className="mt-2">
+                                                <p className="text-sm text-gray-500">
+                                                    Are you sure you want to kickout <span className="font-semibold">{userToKickout.email}</span>? This will revoke their session and force them to login again.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                                    <button
+                                        type="button"
+                                        className="inline-flex w-full justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 sm:ml-3 sm:w-auto"
+                                        onClick={async () => {
+                                            try {
+                                                await kickoutUser(userToKickout.id);
+                                                setUserToKickout(null);
+                                                refreshUsers();
+                                            } catch (err) {
+                                                alert(err?.response?.data?.message || "Failed to kickout user");
+                                            }
+                                        }}
+                                    >
+                                        Kickout
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto"
+                                        onClick={() => setUserToKickout(null)}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* =======================
              CHANGE EMAIL MODAL
             ======================= */}
             {emailChangeUser && (
@@ -840,13 +948,22 @@ const AdminUsersPage = () => {
                                     {passwordChangeSuccess && <div className="mb-3 rounded-md bg-green-50 p-3 text-sm text-green-700">{passwordChangeSuccess}</div>}
 
                                     <label className="block text-sm font-medium text-gray-900 mb-1">New Password</label>
-                                    <input
-                                        type="password"
-                                        className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm"
-                                        value={newPassword}
-                                        onChange={(e) => setNewPassword(e.target.value)}
-                                        placeholder="••••••••"
-                                    />
+                                    <div className="relative mt-1">
+                                        <input
+                                            type={showResetPassword ? "text" : "password"}
+                                            className="block w-full rounded-md border-0 py-1.5 px-3 pr-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm"
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowResetPassword(!showResetPassword)}
+                                            className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
+                                        >
+                                            {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 gap-2">
                                     <button

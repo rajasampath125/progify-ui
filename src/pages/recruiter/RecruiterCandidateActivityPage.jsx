@@ -8,6 +8,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import { getRecruiterJobs, getAllJobsCandidates } from "../../api/recruiterApi";
+import { useRecruiterData } from "../../context/RecruiterDataContext";
 import {
   ArrowLeft, AlertTriangle, Clock, CheckCircle2, BarChart2, User,
 } from "lucide-react";
@@ -18,28 +19,10 @@ const RecruiterCandidateActivityPage = () => {
   const { email } = useParams();
   const decodedEmail = decodeURIComponent(email);
 
-  const [jobs, setJobs] = useState([]);
-  const [jobCandidatesMap, setJobCandidatesMap] = useState({});
-  const [loading, setLoading] = useState(true);
+  const { jobs, jobCandidatesMap, loading, ensureLoaded } = useRecruiterData();
   const [noResponseDays] = useState(7);
 
-  useEffect(() => { loadData(); }, []);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [jobsRes, candidatesRes] = await Promise.all([
-        getRecruiterJobs(),
-        getAllJobsCandidates()
-      ]);
-      setJobs(jobsRes.data || []);
-      setJobCandidatesMap(candidatesRes.data || {});
-    } catch (err) {
-      console.error("Failed to load candidate activity data", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => { ensureLoaded(); }, [ensureLoaded]);
 
   const dailyActivity = useMemo(() => {
     const map = {};

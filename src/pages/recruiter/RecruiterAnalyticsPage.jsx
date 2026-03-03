@@ -37,13 +37,10 @@ import {
   Activity,
   RotateCcw
 } from "lucide-react";
-import { getRecruiterJobs, getAllJobsCandidates } from "../../api/recruiterApi";
+import { useRecruiterData } from "../../context/RecruiterDataContext";
 
 const RecruiterAnalyticsPage = () => {
-  const [jobs, setJobs] = useState([]);
-  const [jobCandidatesMap, setJobCandidatesMap] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { jobs, jobCandidatesMap, loading, error, ensureLoaded } = useRecruiterData();
   const [dateRange, setDateRange] = useState("30"); // ALL | 7 | 30
   const [selectedCandidate, setSelectedCandidate] = useState("ALL");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
@@ -51,38 +48,12 @@ const RecruiterAnalyticsPage = () => {
   const [candidateSearch, setCandidateSearch] = useState("");
   const navigate = useNavigate();
 
+  useEffect(() => { ensureLoaded(); }, [ensureLoaded]);
+
   const handleBarClick = (data) => {
     console.log("BAR CLICK DATA:", data);
     if (!data || !data.date) return;
-
-    // YYYY-MM-DD already
     navigate(`/recruiter/jobs?date=${data.date}`);
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const [jobsRes, candidatesRes] = await Promise.all([
-        getRecruiterJobs(),
-        getAllJobsCandidates()
-      ]);
-      setJobs(jobsRes.data || []);
-      setJobCandidatesMap(candidatesRes.data || {});
-    } catch (err) {
-      console.error("Failed to load analytics data", err);
-      if (!err.response) {
-        setError("Network Error: Backend server is unreachable.");
-      } else {
-        setError("Failed to load analytics data.");
-      }
-    } finally {
-      setLoading(false);
-    }
   };
 
   const filteredJobs = useMemo(() => {
@@ -263,17 +234,8 @@ const RecruiterAnalyticsPage = () => {
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:tracking-tight mb-1">
-          Recruiter Analytics
-        </h1>
-        <p className="text-sm text-gray-500 mb-2">
-          Performance & reporting overview
-        </p>
-        <p className="text-sm text-gray-500 max-w-3xl">
-          This page gives you a high-level overview of your recruiting activity.
-          It helps you understand how often jobs are assigned, how candidates respond,
-          and which candidates or time periods need follow-up or attention.
-        </p>
+        <h1 className="page-header">Recruiter Analytics</h1>
+        <p className="page-subheader">Performance & reporting overview — job assignments, candidate response rates, and follow-up insights.</p>
       </div>
 
       {error && (
@@ -288,12 +250,13 @@ const RecruiterAnalyticsPage = () => {
 
       {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        <KPI title="Total Jobs" value={jobs.length} icon={<Briefcase className="w-5 h-5 text-indigo-600" />} />
-        <KPI title="Jobs Today" value={jobsToday} icon={<Calendar className="w-5 h-5 text-indigo-600" />} />
-        <KPI title="Jobs (Last 7 Days)" value={jobsLast7Days} icon={<Activity className="w-5 h-5 text-indigo-600" />} />
+        <KPI gradIndex={0} title="Total Jobs" value={jobs.length} icon={<Briefcase className="w-5 h-5 text-white" />} />
+        <KPI gradIndex={1} title="Jobs Today" value={jobsToday} icon={<Calendar className="w-5 h-5 text-white" />} />
+        <KPI gradIndex={2} title="Jobs (Last 7 Days)" value={jobsLast7Days} icon={<Activity className="w-5 h-5 text-white" />} />
         <KPI
-          title={"Application Rate"}
-          icon={<span title="Calculated as: (Total Applied Jobs ÷ Total Assigned Jobs) × 100" className="cursor-help text-indigo-600 font-bold bg-indigo-50 rounded-full w-5 h-5 flex items-center justify-center text-xs">i</span>}
+          gradIndex={3}
+          title="Application Rate"
+          icon={<span title="Calculated as: (Total Applied Jobs ÷ Total Assigned Jobs) × 100" className="cursor-help text-white/80 font-bold w-5 h-5 flex items-center justify-center text-xs">i</span>}
           value={
             applicationBreakdown.applied + applicationBreakdown.pending === 0
               ? "0%"
@@ -580,23 +543,32 @@ const RecruiterAnalyticsPage = () => {
    UI HELPERS
 ========================= */
 
-const KPI = ({ title, value, icon }) => (
-  <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm overflow-hidden flex flex-col justify-center">
-    <div className="flex items-center justify-between mb-4">
-      <div className="text-sm font-medium text-gray-500">
-        {title}
+const KPI_GRADIENTS = [
+  "from-indigo-500 to-violet-600",
+  "from-sky-500 to-blue-600",
+  "from-emerald-400 to-teal-600",
+  "from-amber-400 to-orange-500",
+];
+
+const KPI = ({ title, value, icon, gradIndex = 0 }) => (
+  <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${KPI_GRADIENTS[gradIndex % KPI_GRADIENTS.length]} p-6 text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200`}>
+    <div className="absolute -top-4 -right-4 w-24 h-24 bg-white/10 rounded-full" />
+    <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-white/10 rounded-full" />
+    <div className="relative">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-medium text-white/80">{title}</p>
+        <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
+          {icon}
+        </div>
       </div>
-      {icon && <div className="p-2 bg-indigo-50 rounded-lg">{icon}</div>}
-    </div>
-    <div className="text-3xl font-bold text-gray-900">
-      {value}
+      <p className="text-4xl font-extrabold tracking-tight">{value}</p>
     </div>
   </div>
 );
 
 const ChartCard = ({ title, children }) => (
-  <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm flex flex-col">
-    <h3 className="text-lg font-bold text-gray-900 mb-4">{title}</h3>
+  <div className="bg-white rounded-2xl p-6 shadow-sm ring-1 ring-slate-900/5 flex flex-col">
+    <h3 className="text-base font-bold text-slate-900 mb-1">{title}</h3>
     <div className="flex-grow flex flex-col">
       {children}
     </div>
