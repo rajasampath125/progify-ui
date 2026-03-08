@@ -2,9 +2,11 @@
  * CalendarPage.jsx  (~200 lines)
  * Orchestrator — composes sub-components, owns navigation & view state.
  */
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { Calendar } from "react-big-calendar";
 import format from "date-fns/format";
+import startOfMonth from "date-fns/startOfMonth";
+import endOfMonth from "date-fns/endOfMonth";
 import addMonths from "date-fns/addMonths";
 import subMonths from "date-fns/subMonths";
 import addWeeks from "date-fns/addWeeks";
@@ -28,7 +30,7 @@ import ManageTypesModal from "./calendar/ManageTypesModal";
 
 // ── Per-type event styling ─────────────────────────────────────────────────────
 const buildEventProps = (allTypeConfig) => (event) => {
-    const isPast = event.end < new Date();
+    const isPast = event.end < new Date(Date.now() - 3600000);
     const t = event.resource.ownerOrAdmin ? event.resource.interviewType : "Blocked";
     const cfg = allTypeConfig[t] ?? allTypeConfig.Other;
     return {
@@ -52,7 +54,7 @@ const buildEventProps = (allTypeConfig) => (event) => {
 
 // ── Event block inner content ──────────────────────────────────────────────────
 const EventBlock = ({ event, allTypeConfig }) => {
-    const isPast = event.end < new Date();
+    const isPast = event.end < new Date(Date.now() - 3600000);
     const t = event.resource.ownerOrAdmin ? event.resource.interviewType : "Blocked";
     const cfg = allTypeConfig[t] ?? allTypeConfig.Other;
     return (
@@ -135,13 +137,25 @@ const CalendarPage = () => {
     const calLabel = useMemo(() => {
         if (currentView === "month") return format(currentDate, "MMMM yyyy");
         if (currentView === "week") {
-            const s = addDays(new Date(currentDate.setDate(currentDate.getDate() - currentDate.getDay())), 0);
             const start = new Date(currentDate); start.setDate(start.getDate() - start.getDay());
             const end = addDays(start, 6);
             return `${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}`;
         }
         return format(currentDate, "EEEE, MMMM d, yyyy");
     }, [currentView, currentDate]);
+
+    const refresh = useCallback(() => {
+        const start = startOfMonth(currentDate);
+        const end = endOfMonth(start);
+        const startIso = format(start, "yyyy-MM-dd'T'00:00:00");
+        const endIso = format(end, "yyyy-MM-dd'T'23:59:59");
+        fetchSchedules(startIso, endIso);
+    }, [currentDate, fetchSchedules]);
+
+    // ── Fetch schedules based on visible range ────────────────────────────────
+    useEffect(() => {
+        refresh();
+    }, [currentDate.getMonth(), currentDate.getFullYear(), refresh]);
 
     // ── Open modal helpers ────────────────────────────────────────────────────
     const openCreate = useCallback((sd = "", st = "09:00", ed = "", et = "10:00") => {
@@ -151,7 +165,7 @@ const CalendarPage = () => {
     }, []);
 
     const handleSelectSlot = (slot) => {
-        if (slot.start < new Date()) {
+        if (slot.start < new Date(Date.now() - 3600000)) {
             setPastDateErrorOpen(true);
             return;
         }
@@ -218,7 +232,7 @@ const CalendarPage = () => {
             if (selectedEvent) await updateSchedule(selectedEvent.id, payload);
             else await createSchedule(payload);
             setModalOpen(false);
-            fetchSchedules();
+            refresh();
         } catch (err) {
             const msg = err.response?.data?.message || err.message || "Failed to schedule interview.";
             throw new Error(msg);
@@ -231,7 +245,7 @@ const CalendarPage = () => {
         if (!window.confirm("Delete this interview block?")) return;
         await deleteSchedule(selectedEvent.id);
         setModalOpen(false);
-        fetchSchedules();
+        refresh();
     };
 
     // ── Memoised RBC components ───────────────────────────────────────────────

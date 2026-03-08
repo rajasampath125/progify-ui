@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useRecruiterData } from "../../context/RecruiterDataContext";
+import { getDashboardSummary, getCandidatePipeline } from "../../api/recruiterApi";
 import {
   BarChart2, Zap, Archive, PlusCircle, List,
   ArrowRight, User, AlertTriangle, Search,
@@ -44,34 +44,50 @@ function RatePill({ rate }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 const RecruiterDashboardPage = () => {
-  const { jobs, jobCandidatesMap, loading, error, ensureLoaded } = useRecruiterData();
   const [candidateSearch, setCandidateSearch] = useState("");
   const navigate = useNavigate();
 
-  useEffect(() => { ensureLoaded(); }, [ensureLoaded]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [summary, setSummary] = useState({ totalJobs: 0, activeJobs: 0 });
+  const [candidateSummaryArray, setCandidateSummaryArray] = useState([]);
 
-  const totalJobs = jobs.length;
-  const activeJobs = jobs.filter(j => j.active).length;
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([getDashboardSummary(), getCandidatePipeline()])
+      .then(([summaryRes, pipelineRes]) => {
+        setSummary({
+          totalJobs: summaryRes.data.totalJobs || 0,
+          activeJobs: summaryRes.data.activeJobs || 0
+        });
+
+        const raw = pipelineRes.data || [];
+        const mapped = raw.map(p => {
+          const assigned = p.assigned || 0;
+          const applied = p.applied || 0;
+          return {
+            id: p.candidateId,
+            name: p.candidateName || p.email || "",
+            email: p.email || "",
+            assigned,
+            applied,
+            pending: assigned - applied,
+            rate: assigned === 0 ? "0%" : `${Math.round((applied / assigned) * 100)}%`
+          };
+        }).sort((a, b) => b.pending - a.pending);
+
+        setCandidateSummaryArray(mapped);
+      })
+      .catch(err => {
+        console.error(err);
+        setError("Failed to load dashboard data");
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const totalJobs = summary.totalJobs;
+  const activeJobs = summary.activeJobs;
   const inactiveJobs = totalJobs - activeJobs;
-
-  const candidateSummaryArray = useMemo(() => {
-    const acc = {};
-    Object.values(jobCandidatesMap).forEach(candidates => {
-      candidates.forEach(c => {
-        const email = c.candidateEmail;
-        if (!acc[email]) acc[email] = { assigned: 0, applied: 0 };
-        acc[email].assigned += 1;
-        if (c.applicationStatus === "APPLIED") acc[email].applied += 1;
-      });
-    });
-    return Object.entries(acc).map(([email, s]) => ({
-      email,
-      assigned: s.assigned,
-      applied: s.applied,
-      pending: s.assigned - s.applied,
-      rate: s.assigned === 0 ? "0%" : `${Math.round((s.applied / s.assigned) * 100)}%`,
-    })).sort((a, b) => b.pending - a.pending);
-  }, [jobCandidatesMap]);
 
   const actionableCandidates = useMemo(
     () => candidateSummaryArray.filter(c => c.pending > 0 && Number(c.rate.replace("%", "")) < 50).slice(0, 3),
@@ -180,7 +196,7 @@ const RecruiterDashboardPage = () => {
               <div key={c.email} className="bg-white border border-red-100 rounded-2xl p-5 hover:shadow-lg hover:shadow-red-50 transition-all duration-200 relative overflow-hidden">
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-red-400 to-rose-600 rounded-l-2xl" />
                 <div className="pl-1">
-                  <p className="font-semibold text-slate-800 truncate text-sm mb-3">{c.email}</p>
+                  <p className="font-semibold text-slate-800 truncate text-sm mb-3">{c.name}</p>
                   <div className="flex items-center gap-2 mb-4">
                     <span className="bg-red-50 text-red-700 text-xs font-bold px-2.5 py-1 rounded-full ring-1 ring-red-200">
                       {c.pending} Pending
@@ -188,7 +204,7 @@ const RecruiterDashboardPage = () => {
                     <RatePill rate={c.rate} />
                   </div>
                   <button
-                    onClick={() => navigate(`/recruiter/candidates/${encodeURIComponent(c.email)}/activity`)}
+                    onClick={() => navigate(`/recruiter/candidates/${c.id}/activity`)}
                     className="w-full text-center text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl py-2 transition-colors flex items-center justify-center gap-1.5"
                   >
                     View Activity <ArrowRight className="w-3.5 h-3.5" />
@@ -226,7 +242,7 @@ const RecruiterDashboardPage = () => {
             <table className="min-w-full divide-y divide-slate-100">
               <thead>
                 <tr className="bg-slate-50">
-                  {["Candidate", "Assigned", "Applied", "Pending", "Rate"].map(h => (
+                  {["Candidate", "Assigned", "Applied", "Pending", "Rate", "Actions"].map(h => (
                     <th key={h} className="px-5 py-3.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -243,13 +259,13 @@ const RecruiterDashboardPage = () => {
                     <tr key={c.email} className="hover:bg-slate-50 transition-colors group">
                       <td
                         className="px-5 py-3.5 text-sm font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer truncate max-w-[220px]"
-                        onClick={() => navigate(`/recruiter/candidates/${encodeURIComponent(c.email)}/activity`)}
+                        onClick={() => navigate(`/recruiter/candidates/${c.id}/view`)}
                       >
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold shrink-0">
-                            {c.email[0].toUpperCase()}
+                            {c.name[0].toUpperCase()}
                           </div>
-                          <span className="truncate">{c.email}</span>
+                          <span className="truncate">{c.name}</span>
                         </div>
                       </td>
                       <td className="px-5 py-3.5 text-sm text-slate-700 font-medium">{c.assigned}</td>
@@ -264,6 +280,14 @@ const RecruiterDashboardPage = () => {
                         </span>
                       </td>
                       <td className="px-5 py-3.5"><RatePill rate={c.rate} /></td>
+                      <td className="px-5 py-3.5 text-sm text-right">
+                        <button
+                          onClick={() => navigate(`/recruiter/candidates/${c.id}/activity`)}
+                          className="text-indigo-600 hover:text-indigo-900 font-medium"
+                        >
+                          View Activity
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}

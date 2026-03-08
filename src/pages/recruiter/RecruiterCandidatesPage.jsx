@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getAllCandidatesForRecruiter, getAllJobsCandidates } from "../../api/recruiterApi";
+import { getAllCandidatesForRecruiter, getCandidatePipeline } from "../../api/recruiterApi";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search,
@@ -16,7 +16,7 @@ import EmptyState from "../../components/ui/EmptyState";
 
 const RecruiterCandidatesPage = () => {
   const [candidates, setCandidates] = useState([]);
-  const [jobCandidatesMap, setJobCandidatesMap] = useState({});
+  const [candidateStatsMap, setCandidateStatsMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
@@ -54,13 +54,25 @@ const RecruiterCandidatesPage = () => {
   useEffect(() => {
     setLoading(true);
     setError("");
-    // Fetch both in parallel — only ONE call to getAllJobsCandidates ever
+    // Fetch both in parallel
     Promise.all([
       getAllCandidatesForRecruiter(),
-      getAllJobsCandidates(),
-    ]).then(([candidatesRes, jobsRes]) => {
+      getCandidatePipeline(),
+    ]).then(([candidatesRes, pipelineRes]) => {
       setCandidates(candidatesRes.data);
-      setJobCandidatesMap(jobsRes.data || {});
+
+      const statsMap = {};
+      (pipelineRes.data || []).forEach(p => {
+        const assigned = p.assigned || 0;
+        const applied = p.applied || 0;
+        statsMap[p.candidateId] = {
+          assigned,
+          applied,
+          pending: assigned - applied,
+          rate: assigned === 0 ? "0%" : `${Math.round((applied / assigned) * 100)}%`
+        };
+      });
+      setCandidateStatsMap(statsMap);
     }).catch((err) => {
       console.error("Failed to load candidates", err);
       if (!err.response) {
@@ -71,22 +83,11 @@ const RecruiterCandidatesPage = () => {
     }).finally(() => setLoading(false));
   }, []);
 
-  // Compute stats instantly with useMemo — no setState, no extra render
+  // Compute stats instantly from cache
   const candidateStats = useMemo(() => {
     if (!selectedCandidate) return { assigned: 0, applied: 0, pending: 0, rate: "0%" };
-    let assigned = 0, applied = 0;
-    Object.values(jobCandidatesMap).forEach(jobCandidates => {
-      for (const r of jobCandidates) {
-        if (r.candidateEmail === selectedCandidate.email) {
-          assigned++;
-          if (r.applicationStatus === "APPLIED") applied++;
-        }
-      }
-    });
-    const pending = assigned - applied;
-    const rate = assigned === 0 ? "0%" : `${Math.round((applied / assigned) * 100)}%`;
-    return { assigned, applied, pending, rate };
-  }, [selectedCandidate, jobCandidatesMap]);
+    return candidateStatsMap[selectedCandidate.id] || { assigned: 0, applied: 0, pending: 0, rate: "0%" };
+  }, [selectedCandidate, candidateStatsMap]);
 
   const categories = useMemo(() => [
     ...new Set(candidates.map((c) => c.category).filter(Boolean)),
@@ -358,7 +359,7 @@ const RecruiterCandidatesPage = () => {
 
               <div className="mt-8 border-t border-gray-100 pt-6">
                 <button
-                  onClick={() => navigate(`/recruiter/candidates/${selectedCandidate.id}`)}
+                  onClick={() => navigate(`/recruiter/candidates/${selectedCandidate.id}/activity`)}
                   className="w-full justify-center inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                 >
                   View Full Activity Profile

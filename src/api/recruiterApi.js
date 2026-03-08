@@ -63,3 +63,23 @@ export const createRecruiterJob = (formData) => {
     },
   });
 };
+
+/* ===================== */
+/* RECRUITER (DASHBOARD) */
+/* ===================== */
+
+export const getDashboardSummary = () => {
+  return api.get("/admin/metrics/summary");
+};
+
+export const getCandidatePipeline = () => {
+  return api.get("/admin/metrics/candidates/jobs?from=1970-01-01&to=2100-01-01");
+};
+
+export const getAssignmentAnalytics = (params = {}) => {
+  return api.get("/admin/metrics/assignments", { params });
+};
+
+export const getCandidateMetricsByCategory = () => {
+  return api.get("/admin/metrics/users/by-category");
+};

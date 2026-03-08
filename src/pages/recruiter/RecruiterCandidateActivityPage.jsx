@@ -7,8 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
-import { getRecruiterJobs, getAllJobsCandidates } from "../../api/recruiterApi";
-import { useRecruiterData } from "../../context/RecruiterDataContext";
+import { getAssignmentAnalytics } from "../../api/recruiterApi";
 import {
   ArrowLeft, AlertTriangle, Clock, CheckCircle2, BarChart2, User,
 } from "lucide-react";
@@ -16,30 +15,53 @@ import EmptyState from "../../components/ui/EmptyState";
 
 const RecruiterCandidateActivityPage = () => {
   const navigate = useNavigate();
-  const { email } = useParams();
-  const decodedEmail = decodeURIComponent(email);
+  const { id } = useParams();
 
-  const { jobs, jobCandidatesMap, loading, ensureLoaded } = useRecruiterData();
+  const [assignmentData, setAssignmentData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [noResponseDays] = useState(7);
 
-  useEffect(() => { ensureLoaded(); }, [ensureLoaded]);
+  useEffect(() => {
+    loadActivity();
+  }, [id]);
+
+  const loadActivity = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      // Fetch assignment analytics ONLY for this candidate
+      const res = await getAssignmentAnalytics({
+        from: "1970-01-01",
+        to: new Date().toISOString().split('T')[0],
+        candidateId: id
+      });
+      setAssignmentData(res.data || []);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load activity data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const candidateInfo = useMemo(() => {
+    if (assignmentData.length > 0) {
+      const first = assignmentData[0];
+      return { name: first.candidateName, email: first.candidateEmail };
+    }
+    return { name: "Candidate", email: "" };
+  }, [assignmentData]);
 
   const dailyActivity = useMemo(() => {
-    const map = {};
-    Object.entries(jobCandidatesMap).forEach(([jobId, candidates]) => {
-      const job = jobs.find((j) => j.id === jobId);
-      if (!job) return;
-      candidates
-        .filter((c) => c.candidateEmail === decodedEmail)
-        .forEach((c) => {
-          const date = new Date(job.createdAt).toISOString().split("T")[0];
-          if (!map[date]) map[date] = { date, assigned: 0, applied: 0 };
-          map[date].assigned += 1;
-          if (c.applicationStatus === "APPLIED") map[date].applied += 1;
-        });
-    });
-    return Object.values(map).sort((a, b) => new Date(a.date) - new Date(b.date));
-  }, [jobCandidatesMap, jobs, decodedEmail]);
+    return assignmentData
+      .map(a => ({
+        date: a.date,
+        assigned: a.jobsAssigned,
+        applied: a.applied
+      }))
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [assignmentData]);
 
   const hasEverApplied = dailyActivity.some(d => d.applied > 0);
 
@@ -93,7 +115,8 @@ const RecruiterCandidateActivityPage = () => {
         </div>
         <p className="text-sm text-gray-500">
           Day-wise job assignment &amp; application activity for{" "}
-          <span className="font-semibold text-indigo-600">{decodedEmail}</span>
+          <span className="font-semibold text-indigo-600">{candidateInfo.name}</span>
+          {candidateInfo.email && <span className="text-gray-400 font-normal ml-1">({candidateInfo.email})</span>}
         </p>
       </div>
 
