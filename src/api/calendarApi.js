@@ -1,6 +1,6 @@
 import api from "./axios";
 
-export const getSchedules = () => api.get("/schedule");
+export const getSchedules = (params) => api.get("/schedule", { params });
 export const createSchedule = (data) => api.post("/schedule", data);
 export const updateSchedule = (id, data) => api.put(`/schedule/${id}`, data);
 export const deleteSchedule = (id) => api.delete(`/schedule/${id}`);

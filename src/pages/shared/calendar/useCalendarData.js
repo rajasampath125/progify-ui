@@ -21,10 +21,13 @@ export const useCalendarData = () => {
     const [candidates, setCandidates] = useState([]);
     const [customTypes, setCustomTypes] = useState([]);
 
-    const fetchSchedules = useCallback(async () => {
+    const fetchSchedules = useCallback(async (start, end) => {
         setLoading(true);
         try {
-            const res = await getSchedules();
+            const params = {};
+            if (start) params.start = start;
+            if (end) params.end = end;
+            const res = await getSchedules(params);
             setEvents(res.data.map(s => ({
                 id: s.id,
                 title: s.candidateName || "Blocked",
@@ -49,17 +52,14 @@ export const useCalendarData = () => {
     }, []);
 
     useEffect(() => {
-        // Fetch all data in parallel — much faster than sequential
-        const fetches = [fetchSchedules(), fetchCustomTypes()];
+        // Initial load for types
+        fetchCustomTypes();
         if (isPrivileged) {
-            fetches.push(
-                getCandidatesList()
-                    .then(r => setCandidates(r.data))
-                    .catch(e => console.error("Failed to load candidates list", e))
-            );
+            getCandidatesList()
+                .then(r => setCandidates(r.data))
+                .catch(e => console.error("Failed to load candidates list", e));
         }
-        Promise.all(fetches);
-    }, [isPrivileged]); // only re-fetch if role changes, not every auth ref change
+    }, [isPrivileged, fetchCustomTypes]);
 
     const addCustomType = async (name, color) => {
         await createInterviewType({ name: name.trim(), color });

@@ -37,18 +37,58 @@ import {
   Activity,
   RotateCcw
 } from "lucide-react";
-import { useRecruiterData } from "../../context/RecruiterDataContext";
+import {
+  getDashboardSummary,
+  getAssignmentAnalytics,
+  getCandidatePipeline,
+  getCandidateMetricsByCategory
+} from "../../api/recruiterApi";
 
 const RecruiterAnalyticsPage = () => {
-  const { jobs, jobCandidatesMap, loading, error, ensureLoaded } = useRecruiterData();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [summary, setSummary] = useState({ totalJobs: 0 });
+  const [assignmentData, setAssignmentData] = useState([]);
+  const [pipelineData, setPipelineData] = useState([]);
+  const [categoryMetrics, setCategoryMetrics] = useState([]);
+
   const [dateRange, setDateRange] = useState("30"); // ALL | 7 | 30
   const [selectedCandidate, setSelectedCandidate] = useState("ALL");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
-  const [categories, setCategories] = useState([]);
   const [candidateSearch, setCandidateSearch] = useState("");
   const navigate = useNavigate();
 
-  useEffect(() => { ensureLoaded(); }, [ensureLoaded]);
+  useEffect(() => {
+    loadAnalytics();
+  }, [dateRange]);
+
+  const loadAnalytics = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const from = dateRange === "ALL" ? "1970-01-01" : new Date(Date.now() - Number(dateRange) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const to = new Date().toISOString().split('T')[0];
+
+      const [summaryRes, assignmentRes, pipelineRes, categoryRes] = await Promise.all([
+        getDashboardSummary(),
+        getAssignmentAnalytics({ from, to }),
+        getCandidatePipeline(),
+        getCandidateMetricsByCategory()
+      ]);
+
+      setSummary({ totalJobs: summaryRes.data.totalJobs || 0 });
+      setAssignmentData(assignmentRes.data || []);
+      setPipelineData(pipelineRes.data || []);
+      setCategoryMetrics(categoryRes.data || []);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load analytics data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleBarClick = (data) => {
     console.log("BAR CLICK DATA:", data);
@@ -56,180 +96,83 @@ const RecruiterAnalyticsPage = () => {
     navigate(`/recruiter/jobs?date=${data.date}`);
   };
 
-  const filteredJobs = useMemo(() => {
-    const now = new Date();
+  // Computed values from the optimized data
+  const jobsToday = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return assignmentData
+      .filter(a => a.date === today)
+      .reduce((acc, curr) => acc + curr.jobsAssigned, 0);
+  }, [assignmentData]);
 
-    return jobs.filter((job) => {
-      // Date filter
-      if (dateRange !== "ALL") {
-        const days =
-          (now - new Date(job.createdAt)) /
-          (1000 * 60 * 60 * 24);
-        if (days > Number(dateRange)) return false;
-      }
+  const jobsLast7Days = useMemo(() => {
+    return assignmentData.reduce((acc, curr) => acc + curr.jobsAssigned, 0);
+  }, [assignmentData]);
 
-      // Category filter
-      if (
-        selectedCategory !== "ALL" &&
-        job.categoryName !== selectedCategory
-      ) {
-        return false;
-      }
-
+  const filteredPipeline = useMemo(() => {
+    return pipelineData.filter(p => {
+      if (selectedCandidate !== "ALL" && (p.email || p.candidateName) !== selectedCandidate) return false;
+      // category filtering for pipeline is tricky if not in the DTO, 
+      // but we can filter by candidateSearch here
+      const email = (p.email || p.candidateName || "").toLowerCase();
+      if (candidateSearch && !email.includes(candidateSearch.toLowerCase())) return false;
       return true;
     });
-  }, [jobs, dateRange, selectedCategory]);
+  }, [pipelineData, selectedCandidate, candidateSearch]);
+
+  const applicationBreakdown = useMemo(() => {
+    let applied = 0;
+    let total = 0;
+
+    // If a specific candidate is selected, we use their stats
+    // Otherwise we sum up everything in the pipeline (which already respects the date filter on backend)
+    filteredPipeline.forEach(p => {
+      applied += (p.applied || 0);
+      total += (p.assigned || 0);
+    });
+
+    return { applied, pending: total - applied };
+  }, [filteredPipeline]);
+
+  const jobsAssignedByDate = useMemo(() => {
+    const map = {};
+    assignmentData.forEach(a => {
+      map[a.date] = (map[a.date] || 0) + a.jobsAssigned;
+    });
+    return Object.entries(map)
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [assignmentData]);
+
+  const candidateSummary = useMemo(() => {
+    return filteredPipeline.map(p => {
+      const assigned = p.assigned || 0;
+      const applied = p.applied || 0;
+      return {
+        id: p.candidateId,
+        name: p.candidateName || p.email || "",
+        email: p.email || "",
+        assigned,
+        applied,
+        pending: assigned - applied,
+        rate: assigned === 0 ? "0%" : `${Math.round((applied / assigned) * 100)}%`
+      }
+    }).sort((a, b) => b.pending - a.pending);
+  }, [filteredPipeline]);
+
+  const actionableCandidates = useMemo(
+    () => candidateSummary.filter(c => c.pending > 0 && Number(c.rate.replace("%", "")) < 50).slice(0, 3),
+    [candidateSummary]
+  );
 
   /* =========================
      METRICS
   ========================= */
 
-  const now = new Date();
-
-  const jobsToday = filteredJobs.filter(
-    (j) =>
-      new Date(j.createdAt).toDateString() ===
-      new Date().toDateString()
-  ).length;
-
-  const jobsLast7Days = filteredJobs.filter(
-    (j) =>
-      (new Date() - new Date(j.createdAt)) /
-      (1000 * 60 * 60 * 24) <=
-      7
-  ).length;
-
-  const activeJobs = filteredJobs.filter((j) => j.active).length;
-  const inactiveJobs = filteredJobs.length - activeJobs;
-
-  const applicationBreakdown = useMemo(() => {
-    let applied = 0;
-    let pending = 0;
-
-    Object.entries(jobCandidatesMap).forEach(
-      ([jobId, candidates]) => {
-        const job = filteredJobs.find((j) => j.id === jobId);
-        if (!job) return;
-
-        // Respect date filter
-        if (dateRange !== "ALL") {
-          const days =
-            (new Date() - new Date(job.createdAt)) /
-            (1000 * 60 * 60 * 24);
-          if (days > Number(dateRange)) return;
-        }
-
-        // Respect category filter
-        if (
-          selectedCategory !== "ALL" &&
-          job.categoryName !== selectedCategory
-        )
-          return;
-
-        candidates.forEach((c) => {
-          // Respect candidate filter
-          if (
-            selectedCandidate !== "ALL" &&
-            c.candidateEmail !== selectedCandidate
-          )
-            return;
-
-          if (c.applicationStatus === "APPLIED") applied++;
-          else pending++;
-        });
-      }
-    );
-
-    return { applied, pending };
-  }, [
-    jobCandidatesMap,
-    jobs,
-    dateRange,
-    selectedCategory,
-    selectedCandidate,
-  ]);
-
-
-  /* =========================
-     CHART DATA
-  ========================= */
-
-  const jobsAssignedByDate = useMemo(() => {
-    const map = {};
-
-    filteredJobs.forEach((job) => {
-      //const date = new Date(job.createdAt).toLocaleDateString();
-      const date = new Date(job.createdAt).toISOString().split("T")[0]; // YYYY-MM-DD
-      map[date] = (map[date] || 0) + 1;
-    });
-
-    return Object.entries(map)
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-  }, [filteredJobs]);
-
-  const candidateSummary = useMemo(() => {
-    const map = {};
-
-    Object.entries(jobCandidatesMap).forEach(
-      ([jobId, candidates]) => {
-        const job = jobs.find((j) => j.id === jobId);
-        if (!job) return;
-
-        if (
-          selectedCategory !== "ALL" &&
-          job.categoryName !== selectedCategory
-        )
-          return;
-
-        candidates.forEach((c) => {
-          if (
-            selectedCandidate !== "ALL" &&
-            c.candidateEmail !== selectedCandidate
-          )
-            return;
-
-          const email = c.candidateEmail;
-
-          if (!map[email]) {
-            map[email] = { assigned: 0, applied: 0 };
-          }
-
-          map[email].assigned += 1;
-          if (c.applicationStatus === "APPLIED") {
-            map[email].applied += 1;
-          }
-        });
-      }
-    );
-
-    return Object.entries(map).map(([email, stats]) => ({
-      email,
-      assigned: stats.assigned,
-      applied: stats.applied,
-      pending: stats.assigned - stats.applied,
-      rate:
-        stats.assigned === 0
-          ? "0%"
-          : `${Math.round(
-            (stats.applied / stats.assigned) * 100
-          )}%`,
-    }));
-  }, [
-    jobCandidatesMap,
-    jobs,
-    selectedCandidate,
-    selectedCategory,
-  ]);
-
-
-  const actionableCandidates = candidateSummary
-    .filter((c) => c.pending > 0 && Number(c.rate.replace('%', '')) < 50)
-    .sort((a, b) => b.pending - a.pending)
-    .slice(0, 5);
-
   const renderPieLabel = ({ name, percent }) =>
     `${name} (${Math.round(percent * 100)}%)`;
+
+  const totalAssigned = applicationBreakdown.applied + applicationBreakdown.pending;
+  const applicationRateStr = totalAssigned === 0 ? "0%" : `${Math.round((applicationBreakdown.applied / totalAssigned) * 100)}%`;
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
@@ -250,22 +193,14 @@ const RecruiterAnalyticsPage = () => {
 
       {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        <KPI gradIndex={0} title="Total Jobs" value={jobs.length} icon={<Briefcase className="w-5 h-5 text-white" />} />
+        <KPI gradIndex={0} title="Total Jobs" value={summary.totalJobs} icon={<Briefcase className="w-5 h-5 text-white" />} />
         <KPI gradIndex={1} title="Jobs Today" value={jobsToday} icon={<Calendar className="w-5 h-5 text-white" />} />
-        <KPI gradIndex={2} title="Jobs (Last 7 Days)" value={jobsLast7Days} icon={<Activity className="w-5 h-5 text-white" />} />
+        <KPI gradIndex={2} title="Jobs (Range)" value={jobsLast7Days} icon={<Activity className="w-5 h-5 text-white" />} />
         <KPI
           gradIndex={3}
           title="Application Rate"
           icon={<span title="Calculated as: (Total Applied Jobs ÷ Total Assigned Jobs) × 100" className="cursor-help text-white/80 font-bold w-5 h-5 flex items-center justify-center text-xs">i</span>}
-          value={
-            applicationBreakdown.applied + applicationBreakdown.pending === 0
-              ? "0%"
-              : `${Math.round(
-                (applicationBreakdown.applied /
-                  (applicationBreakdown.applied + applicationBreakdown.pending)) *
-                100
-              )}%`
-          }
+          value={applicationRateStr}
         />
       </div>
 
@@ -282,9 +217,9 @@ const RecruiterAnalyticsPage = () => {
               className="block w-48 rounded-md border-0 py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6"
             >
               <option value="ALL">All Categories</option>
-              {[...new Set(jobs.map((j) => j.categoryName))].filter(Boolean).map((category) => (
-                <option key={category} value={category}>
-                  {category}
+              {categoryMetrics.map((c) => (
+                <option key={c.category} value={c.category}>
+                  {c.category}
                 </option>
               ))}
             </select>
@@ -329,7 +264,7 @@ const RecruiterAnalyticsPage = () => {
       {/* CHARTS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
         <ChartCard title="Jobs Assigned to Candidates (Daily)">
-          {jobs.length === 0 && (
+          {assignmentData.length === 0 && (
             <p className="text-sm text-gray-500">No data available yet</p>
           )}
           <p className="text-xs text-gray-500 mb-4 h-8">
@@ -350,7 +285,7 @@ const RecruiterAnalyticsPage = () => {
                   dataKey="count"
                   fill="#4f46e5"
                   cursor="pointer"
-                  onClick={(data) => handleBarClick(data)}
+                  onClick={(entry) => handleBarClick(entry)}
                   radius={[4, 4, 0, 0]}
                 />
               </BarChart>
@@ -370,13 +305,9 @@ const RecruiterAnalyticsPage = () => {
               className="block w-full max-w-xs rounded-md border-0 py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6"
             >
               <option value="ALL">All Candidates</option>
-              {[...new Set(
-                Object.values(jobCandidatesMap)
-                  .flat()
-                  .map((c) => c.candidateEmail)
-              )].filter(Boolean).map((email) => (
-                <option key={email} value={email}>
-                  {email}
+              {pipelineData.map((p) => (
+                <option key={p.email} value={p.email}>
+                  {p.candidateName || p.email}
                 </option>
               ))}
             </select>
@@ -436,17 +367,16 @@ const RecruiterAnalyticsPage = () => {
             {actionableCandidates.map((c) => (
               <div key={c.email} className="bg-white border border-red-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
-                <div className="font-semibold text-gray-900 truncate mb-1">{c.email}</div>
+                <div className="font-semibold text-gray-900 truncate mb-1">{c.name}</div>
                 <div className="flex justify-between text-sm text-gray-600 mb-4 mt-2">
                   <div className="bg-red-50 px-2.5 py-1 rounded-md text-red-700 font-medium text-xs border border-red-100">Pending: {c.pending}</div>
                   <div className="bg-gray-50 px-2.5 py-1 rounded-md text-gray-700 font-medium text-xs border border-gray-200">Rate: {c.rate}</div>
                 </div>
                 <button
-                  onClick={() => navigate(`/recruiter/candidates/${encodeURIComponent(c.email)}/activity`)}
-                  className="w-full text-center text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg py-2 transition-colors flex items-center justify-center gap-2"
+                  onClick={() => navigate(`/recruiter/candidates/${c.id}/activity`)}
+                  className="w-full text-center text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg py-2 transition-colors"
                 >
-                  View Activity
-                  <ArrowRight className="w-4 h-4" />
+                  Review Activity
                 </button>
               </div>
             ))}
@@ -484,17 +414,18 @@ const RecruiterAnalyticsPage = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Candidate</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jobs Assigned</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applied</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pending</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Application Rate</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Assigned</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Applied</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Pending</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Rate</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
                 {candidateSummary.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-500">
+                    <td colSpan={6} className="px-6 py-12 text-center text-sm text-gray-500">
                       No candidates match the selected filters
                     </td>
                   </tr>
@@ -510,24 +441,39 @@ const RecruiterAnalyticsPage = () => {
                         className="whitespace-nowrap px-6 py-4 text-sm font-medium text-indigo-600 hover:text-indigo-900 cursor-pointer"
                         onClick={() =>
                           navigate(
-                            `/recruiter/candidates/${encodeURIComponent(c.email)}/activity`
+                            `/recruiter/candidates/${c.id}/view`
                           )
                         }
                       >
-                        {c.email}
+                        {c.name}
                       </td>
                       <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">{c.assigned}</td>
                       <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                        <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
-                          {c.applied}
-                        </span>
+                        {c.applied}
                       </td>
                       <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                        <span className="inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">
-                          {c.pending}
+                        {c.pending}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${Number(c.rate.replace("%", "")) >= 75
+                            ? "bg-green-100 text-green-800"
+                            : Number(c.rate.replace("%", "")) >= 40
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-red-100 text-red-800"
+                            }`}
+                        >
+                          {c.rate}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900 font-semibold">{c.rate}</td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-right">
+                        <button
+                          onClick={() => navigate(`/recruiter/candidates/${c.id}/activity`)}
+                          className="text-indigo-600 hover:text-indigo-900 font-medium"
+                        >
+                          View Activity
+                        </button>
+                      </td>
                     </tr>
                   ))}
               </tbody>

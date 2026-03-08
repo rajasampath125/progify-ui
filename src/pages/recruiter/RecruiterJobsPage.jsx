@@ -18,11 +18,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  getRecruiterJobs,
   deactivateRecruiterJob, activateRecruiterJob,
   deleteRecruiterJob, updateRecruiterJob
 } from "../../api/recruiterApi";
-import { invalidateRecruiterCache } from "../../context/RecruiterDataContext";
+import { getAdminJobsPaginated } from "../../api/adminApi";
 import { useSearchParams } from "react-router-dom";
 import {
   Search,
@@ -52,10 +51,11 @@ const RecruiterJobsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const search = searchParams.get("q") || "";
   const statusFilter = searchParams.get("status") || "ALL";
-  const creatorFilter = searchParams.get("creator") || "ALL";
+  const creatorFilter = searchParams.get("creator") || "";
   const page = Number(searchParams.get("page")) || 1;
   const pageSize = Number(searchParams.get("size")) || 15;
   const dateParam = searchParams.get("date"); // YYYY-MM-DD
+  const [totalElements, setTotalElements] = useState(0);
 
   const updateFilters = (updates) => {
     const newParams = new URLSearchParams(searchParams);
@@ -81,14 +81,35 @@ const RecruiterJobsPage = () => {
 
   useEffect(() => {
     loadJobs();
-  }, []);
+  }, [search, statusFilter, creatorFilter, page, pageSize, dateParam]);
 
   const loadJobs = async () => {
     try {
       setLoading(true);
       setError("");
-      const res = await getRecruiterJobs();
-      setJobs(res.data);
+
+      const params = {
+        page: page - 1,
+        size: pageSize,
+      };
+
+      if (search) params.title = search;
+      if (creatorFilter) params.recruiter = creatorFilter;
+
+      if (statusFilter !== "ALL") {
+        params.status = statusFilter === "ACTIVE";
+      }
+
+      if (dateParam) {
+        params.from = `${dateParam}T00:00:00`;
+        const nextDay = new Date(dateParam);
+        nextDay.setDate(nextDay.getDate() + 1);
+        params.to = nextDay.toISOString().split("T")[0] + "T00:00:00";
+      }
+
+      const res = await getAdminJobsPaginated(params);
+      setJobs(res.data.content || []);
+      setTotalElements(res.data.totalElements || 0);
     } catch (err) {
       console.error("Failed to load recruiter jobs", err);
       setError("Failed to load jobs");
@@ -100,7 +121,6 @@ const RecruiterJobsPage = () => {
   const deactivateJob = async (jobId) => {
     try {
       await deactivateRecruiterJob(jobId);
-      invalidateRecruiterCache();
       loadJobs();
     } catch (err) {
       console.error("Failed to deactivate job", err);
@@ -111,7 +131,6 @@ const RecruiterJobsPage = () => {
   const activateJob = async (jobId) => {
     try {
       await activateRecruiterJob(jobId);
-      invalidateRecruiterCache();
       loadJobs();
     } catch (err) {
       console.error("Failed to activate job", err);
@@ -148,48 +167,14 @@ const RecruiterJobsPage = () => {
     try {
       setActionError("");
       await deleteRecruiterJob(jobToDelete.id);
-      invalidateRecruiterCache();
       loadJobs();
       setJobToDelete(null);
     } catch (err) {
       setActionError(err?.response?.data?.message || "Failed to delete job");
     }
   };
-  const creators = [
-    "ALL",
-    ...new Set(jobs.map(j => j.createdByName).filter(Boolean)),
-  ];
-  const filteredJobs = jobs.filter((job) => {
-    // DATE FILTER FROM ANALYTICS
-    if (dateParam) {
-      const jobDate = new Date(job.createdAt)
-        .toISOString()
-        .split("T")[0]; // YYYY-MM-DD
-
-      if (jobDate !== dateParam) return false;
-    }
-
-    const matchesSearch =
-      (job.title || "").toLowerCase().includes((search || "").toLowerCase());
-
-    const matchesStatus =
-      statusFilter === "ALL" ||
-      (statusFilter === "ACTIVE" && job.active) ||
-      (statusFilter === "INACTIVE" && !job.active);
-
-    const matchesCreator =
-      creatorFilter === "ALL" ||
-      job.createdByName === creatorFilter;
-
-    return matchesSearch && matchesStatus && matchesCreator;
-  });
-
-
-  const totalPages = Math.ceil(filteredJobs.length / pageSize);
-  const paginatedJobs = filteredJobs.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  );
+  const totalPages = Math.ceil(totalElements / pageSize);
+  const paginatedJobs = jobs;
 
 
   return (
@@ -273,15 +258,13 @@ const RecruiterJobsPage = () => {
               <label className="block text-xs font-medium text-gray-500 mb-1">Assigned Recruiter</label>
               <div className="relative inline-block w-full">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
-                <select
+                <input
+                  type="text"
+                  placeholder="e.g. John Doe"
                   value={creatorFilter}
                   onChange={(e) => updateFilters({ creator: e.target.value })}
-                  className="block w-full rounded-md border-0 py-1.5 pl-9 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6 max-h-[36px] bg-white relative z-0"
-                >
-                  {creators.map((c) => (
-                    <option key={c} value={c}>{c === "ALL" ? "All Recruiters" : c}</option>
-                  ))}
-                </select>
+                  className="block w-full rounded-md border-0 py-1.5 pl-9 pr-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 max-h-[36px] bg-white relative z-0"
+                />
               </div>
             </div>
 
@@ -303,7 +286,7 @@ const RecruiterJobsPage = () => {
           <div className="shrink-0 w-full lg:w-auto pt-2 lg:pt-0 pb-0.5">
             <button
               className="inline-flex items-center justify-center gap-2 bg-white px-4 py-1.5 text-sm font-semibold text-gray-600 hover:text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 rounded-md transition-colors w-full lg:w-auto whitespace-nowrap"
-              onClick={() => updateFilters({ q: "", status: "ALL", creator: "ALL", date: "" })}
+              onClick={() => updateFilters({ q: "", status: "ALL", creator: "", date: "" })}
             >
               <X className="w-4 h-4" />
               Clear Filters
@@ -341,7 +324,7 @@ const RecruiterJobsPage = () => {
                     {error}
                   </td>
                 </tr>
-              ) : filteredJobs.length === 0 ? (
+              ) : paginatedJobs.length === 0 ? (
                 <tr>
                   <td colSpan={6}>
                     <div className="py-12">
@@ -439,12 +422,12 @@ const RecruiterJobsPage = () => {
         </div>
 
         {/* Pagination Footer */}
-        {filteredJobs.length > 0 && (
+        {totalElements > 0 && (
           <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
             <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{(page - 1) * pageSize + 1}</span> to <span className="font-medium">{Math.min(page * pageSize, filteredJobs.length)}</span> of <span className="font-medium">{filteredJobs.length}</span> results
+                  Showing <span className="font-medium">{(page - 1) * pageSize + 1}</span> to <span className="font-medium">{Math.min(page * pageSize, totalElements)}</span> of <span className="font-medium">{totalElements}</span> results
                 </p>
               </div>
               <div>

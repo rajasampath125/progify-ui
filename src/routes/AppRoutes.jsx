@@ -28,8 +28,6 @@ import RecruiterCandidatesPage from "../pages/recruiter/RecruiterCandidatesPage"
 import RecruiterCandidateViewPage from "../pages/recruiter/RecruiterCandidateViewPage";
 import RecruiterAnalyticsPage from "../pages/recruiter/RecruiterAnalyticsPage";
 import RecruiterCandidateActivityPage from "../pages/recruiter/RecruiterCandidateActivityPage";
-import { RecruiterDataProvider } from "../context/RecruiterDataContext";
-
 import MainLayout from "../components/layout/MainLayout";
 import HomePage from "../pages/HomePage";
 import ContactPage from "../pages/ContactPage";
@@ -91,21 +89,21 @@ export function AppRoutes() {
         </Route>
 
         {/* -------- RECRUITER -------- */}
-        {/* RecruiterDataProvider uses a module-level singleton cache — all instances share data */}
+        {/* RecruiterDataProvider uses a module-level singleton cache - all instances share data */}
         <Route
           path="/recruiter"
           element={
             <ProtectedRoute role="RECRUITER" />
           }
         >
-          <Route path="dashboard" element={<RecruiterDataProvider><RecruiterDashboardPage /></RecruiterDataProvider>} />
-          <Route path="jobs" element={<RecruiterDataProvider><RecruiterJobsPage /></RecruiterDataProvider>} />
+          <Route path="dashboard" element={<RecruiterDashboardPage />} />
+          <Route path="jobs" element={<RecruiterJobsPage />} />
           <Route path="jobs/create" element={<RecruiterJobCreatePage />} />
           <Route path="profile" element={<RecruiterProfilePage />} />
           <Route path="candidates" element={<RecruiterCandidatesPage />} />
-          <Route path="candidates/:id" element={<RecruiterCandidateViewPage />} />
-          <Route path="analytics" element={<RecruiterDataProvider><RecruiterAnalyticsPage /></RecruiterDataProvider>} />
-          <Route path="candidates/:email/activity" element={<RecruiterDataProvider><RecruiterCandidateActivityPage /></RecruiterDataProvider>} />
+          <Route path="candidates/:id/view" element={<RecruiterCandidateViewPage />} />
+          <Route path="candidates/:id/activity" element={<RecruiterCandidateActivityPage />} />
+          <Route path="analytics" element={<RecruiterAnalyticsPage />} />
           <Route path="jobs/:id/candidates" element={<RecruiterJobCandidatesPage />} />
           <Route path="calendar" element={<CalendarPage />} />
         </Route>
